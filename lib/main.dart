@@ -6,8 +6,13 @@ import 'package:fynix/screens/personal_screen.dart';
 import 'package:fynix/screens/proveedores_screen.dart';
 import 'package:fynix/screens/reportes_screen.dart';
 
+import 'package:intl/date_symbol_data_local.dart';
 
-void main() {
+
+void main() async{
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await initializeDateFormatting('es', null);
   runApp(const MainApp());
 }
 

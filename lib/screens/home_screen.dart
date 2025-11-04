@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fynix/widgets/custom_drawer.dart';
+import 'package:fynix/widgets/calendario_widget.dart';
+
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -10,7 +12,7 @@ class HomeScreen extends StatelessWidget {
       appBar: AppBar(
         leading: Builder(
           builder: (context) => IconButton(
-            icon: const Icon(Icons.menu),
+            icon: const Icon(Icons.menu, color: Colors.white),
             onPressed: () => Scaffold.of(context).openDrawer(),
           ),
         ),
@@ -30,12 +32,11 @@ class HomeScreen extends StatelessWidget {
             stops: [0.3, 0.3], 
           ),
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
+        child: SingleChildScrollView(
+          
           
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-
             children: [
 
             Container(
@@ -44,19 +45,26 @@ class HomeScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start, 
                 children: const [
-                  Text(
-                    "Hola de nuevo",
-                    textAlign: TextAlign.left,
-                    style: TextStyle(
-                      fontSize: 28,
-                      color: Colors.white,
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                    child: Text(
+                      "Hola de nuevo",
+                      textAlign: TextAlign.left,
+                      style: TextStyle(
+                        fontSize: 28,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
-                  Text(
-                    "USUARIO",
-                    style: TextStyle(
-                      fontSize: 30,
-                      color: Colors.white,
+                  
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                    child: Text(
+                      "USUARIO",
+                      style: TextStyle(
+                        fontSize: 30,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ],
@@ -65,35 +73,40 @@ class HomeScreen extends StatelessWidget {
 
 
             Container(
-                margin: const EdgeInsets.symmetric(vertical: 20),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Card(
-                  elevation: 4,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const SizedBox(
-                    height: 220,
-                    width: double.infinity,
-                    child: Center(
-                      child: Text("Calendario"
-                      )
+                    elevation: 4,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24), // Ajusté el radio para que se vea como en el prototipo
                     ),
-                  ),
+                    // Aquí reemplazas el SizedBox vacío:
+                    child: const SizedBox( 
+                        height: 220, // Altura ajustada para contener el contenido del CalendarWidget
+                        width: double.infinity,
+                        child: CalendarWidget(), // ¡Aquí está el calendario funcional!
+                    ),
                 ),
-              ),
-              const SizedBox(height: 6),
+            ),
+            const SizedBox(height: 16),
               
-            Text("Actividades Recientes",
-              style: TextStyle(
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
+              child: Text("Actividades Recientes",
+                style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
                 color: Colors.black87,
               ),
             ),
-              const SizedBox(height: 12),
+          
+
+              
+            ),
+            const SizedBox(height: 0),
             SizedBox(
-              height: 140, // Altura del carrusel de tarjetas
+              height: 200, // Altura del carrusel de tarjetas 
               child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10 ),
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   children: [
@@ -120,7 +133,7 @@ class HomeScreen extends StatelessWidget {
 
 Widget cardGrafica({required String title}) {
   return Padding(
-    padding: const EdgeInsets.only(right: 12), // Espaciado entre cards
+    padding: const EdgeInsets.symmetric(horizontal: 12), // Espaciado entre cards
     child: Card(
       elevation: 4,
       shape: RoundedRectangleBorder(
@@ -233,7 +246,7 @@ class _TaskSectionState extends State<TaskSection> {
                   const Text("Categoría: "),
                   DropdownButton<String>(
                     value: selectedCategory,
-                    items: ['Personal', 'Empresa', 'Otro']
+                    items: ['Personal', 'General', 'Otro']
                         .map((cat) => DropdownMenuItem(value: cat, child: Text(cat)))
                         .toList(),
                     onChanged: (value) {
@@ -293,68 +306,71 @@ class _TaskSectionState extends State<TaskSection> {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              "Tareas",
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            ElevatedButton.icon(
-              onPressed: () => _addOrEditTask(),
-              icon: const Icon(Icons.add),
-              label: const Text("Agregar tarea"),
-            ),
-            const SizedBox(height: 8),
-            SizedBox(
-              height: 100,
-              child: tasks.isEmpty
-                  ? const Center(child: Text("No hay tareas aún."))
-                  : ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: tasks.length,
-                      itemBuilder: (context, index) {
-                        final task = tasks[index];
-                        return Card(
-                          color: _getStatusColor(task),
-                          child: ListTile(
-                            leading: Checkbox(
-                              shape: const CircleBorder(),
-                              value: task.completed,
-                              onChanged: (value) {
-                                setState(() {
-                                  task.completed = value ?? false;
-                                });
-                              },
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Card(
+        elevation: 4, //efecto de sombra
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "Tareas",
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              ElevatedButton.icon(
+                onPressed: () => _addOrEditTask(),
+                icon: const Icon(Icons.add),
+                label: const Text("Agregar tarea"),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 300,
+                child: tasks.isEmpty
+                    ? const Center(child: Text("No hay tareas aún."))
+                    : ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: tasks.length,
+                        itemBuilder: (context, index) {
+                          final task = tasks[index];
+                          return Card(
+                            color: _getStatusColor(task),
+                            child: ListTile(
+                              leading: Checkbox(
+                                shape: const CircleBorder(),
+                                value: task.completed,
+                                onChanged: (value) {
+                                  setState(() {
+                                    task.completed = value ?? false;
+                                  });
+                                },
+                              ),
+                              title: Text(task.name),
+                              subtitle: Text(
+                                  "Fecha: ${task.date.day}/${task.date.month}/${task.date.year} - ${task.category} - ${task.status}"),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.edit, color: Colors.blue),
+                                    onPressed: () => _addOrEditTask(index: index),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete, color: Colors.red),
+                                    onPressed: () => _deleteTask(index),
+                                  ),
+                                ],
+                              ),
                             ),
-                            title: Text(task.name),
-                            subtitle: Text(
-                                "Fecha: ${task.date.day}/${task.date.month}/${task.date.year} - ${task.category} - ${task.status}"),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.edit, color: Colors.blue),
-                                  onPressed: () => _addOrEditTask(index: index),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete, color: Colors.red),
-                                  onPressed: () => _deleteTask(index),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-            ),
-          ],
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
         ),
       ),
     );
