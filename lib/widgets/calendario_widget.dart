@@ -1,144 +1,163 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:fynix/screens/home_screen.dart'; 
 
 class CalendarWidget extends StatefulWidget {
-  const CalendarWidget({super.key});
+  final DateTime selectedDay;
+  final ValueChanged<DateTime> onDateSelected; 
+  final List<Task> tasks;
+
+  const CalendarWidget({
+    super.key,
+    required this.selectedDay,
+    required this.onDateSelected,
+    required this.tasks, 
+  });
 
   @override
   State<CalendarWidget> createState() => _CalendarWidgetState();
 }
 
 class _CalendarWidgetState extends State<CalendarWidget> {
-  // Colores definidos según el prototipo
-  static const Color accentColor = Color(0xFF004D40); // Color principal para texto e indicadores
-  static const Color selectedBgColor = Color(0xFFB2DFDB); // Fondo del día seleccionado
+  late DateTime _focusedDay;
 
-  // Simulación de los datos del calendario (puedes adaptarlo para usar fechas reales)
-  final List<Map<String, dynamic>> _weekDays = [
-    {'dayName': 'Dom', 'date': 3, 'isSelected': false},
-    {'dayName': 'Lun', 'date': 4, 'isSelected': true}, // Día inicial seleccionado
-    {'dayName': 'Mar', 'date': 5, 'isSelected': false},
-    {'dayName': 'Mie', 'date': 6, 'isSelected': false},
-    {'dayName': 'Jue', 'date': 7, 'isSelected': false},
-    {'dayName': 'Vie', 'date': 8, 'isSelected': false},
-    {'dayName': 'Sab', 'date': 9, 'isSelected': false},
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _focusedDay = widget.selectedDay;
+  }
+
+  @override
+  void didUpdateWidget(covariant CalendarWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.selectedDay != oldWidget.selectedDay) {
+      _focusedDay = widget.selectedDay;
+    }
+  }
+
+  // Función para obtener los días de la semana actual
+  List<DateTime> _getWeekDays(DateTime date) {
+    // Obtener el lunes de esta semana
+    int weekday = date.weekday;
+    DateTime monday = date.subtract(Duration(days: weekday - 1));
+
+    // Generar la semana completa a partir del lunes
+    List<DateTime> weekDays = List.generate(7, (index) => monday.add(Duration(days: index)));
+    
+    return weekDays;
+  }
+
+  // Función para verificar si un día tiene tareas
+  bool _hasTasksForDay(DateTime day) {
+    return widget.tasks.any((task) =>
+        task.date.year == day.year &&
+        task.date.month == day.month &&
+        task.date.day == day.day);
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        children: [
-          // 1. Encabezado del Calendario (Íconos y Título)
-          Row(
+    final currentWeekDays = _getWeekDays(_focusedDay);
+
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.spaceAround,
+      children: [
+        // Encabezado del Calendario (Mes y Año)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+          child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Icon(Icons.apps, color: accentColor),
-              const Text(
-                "Calendario",
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: accentColor,
-                ),
-              ),
-              GestureDetector(
-                onTap: () {
-                  // Lógica para el botón de añadir (+)
+              IconButton(
+                icon: const Icon(Icons.chevron_left, color: Colors.black54),
+                onPressed: () {
+                  setState(() {
+                    _focusedDay = _focusedDay.subtract(const Duration(days: 7));
+                    widget.onDateSelected(_focusedDay); 
+                  });
                 },
-                child: const Icon(Icons.add_circle_outline, color: accentColor),
+              ),
+              Text(
+                DateFormat.yMMMM('es_ES').format(_focusedDay), // Formato: Noviembre 2025
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
+              ),
+              IconButton(
+                icon: const Icon(Icons.chevron_right, color: Colors.black54),
+                onPressed: () {
+                  setState(() {
+                    _focusedDay = _focusedDay.add(const Duration(days: 7));
+                    widget.onDateSelected(_focusedDay);
+                  });
+                },
               ),
             ],
           ),
-          const SizedBox(height:20),
+        ),
+        
+        // Días de la semana (Dom, Lun, Mar...) y Números del día
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8.0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: currentWeekDays.map((day) {
+              final bool isSelected = day.year == widget.selectedDay.year &&
+                                      day.month == widget.selectedDay.month &&
+                                      day.day == widget.selectedDay.day;
+              final bool hasTasks = _hasTasksForDay(day);
 
-          // 2. Lista de Días de la Semana (Scrollable Horizontal)
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: SizedBox(
-              height: 80, // Altura fija para la lista de días
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: _weekDays.length,
-                itemBuilder: (context, index) {
-                  final day = _weekDays[index];
-                  final isSelected = day['isSelected'] as bool;
-            
-                  return GestureDetector(
-                    onTap: () {
-                      // Lógica para cambiar la selección
-                      setState(() {
-                        // Deseleccionar el anterior
-                        for (var item in _weekDays) {
-                          item['isSelected'] = false;
-                        }
-                        // Seleccionar el nuevo
-                        day['isSelected'] = true;
-                      });
-                    },
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 4),
-                      width: 48, // Ancho de cada "pastilla" de día
-                      decoration: BoxDecoration(
-                        color: isSelected ? selectedBgColor : Colors.transparent,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: isSelected ? selectedBgColor : Colors.grey.shade300,
-                          width: 1,
-                        ),
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          // Nombre del día (Dom, Lun, etc.)
-                          Text(
-                            day['dayName'] as String,
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: isSelected ? accentColor : Colors.grey.shade600,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          // Fecha del día (03, 04, etc.)
-                          Text(
-                            day['date'].toString().padLeft(2, '0'),
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: isSelected ? accentColor : Colors.black,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          // Indicador de selección (el punto verde)
-                          if (isSelected)
-                            Container(
-                              width: 6,
-                              height: 6,
-                              decoration: const BoxDecoration(
-                                color: accentColor,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                          if (!isSelected) const SizedBox(height: 6), // Espacio para alinear
-                        ],
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () => widget.onDateSelected(day),
+                  child: Container(
+                    margin: const EdgeInsets.all(4),
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    decoration: BoxDecoration(
+                      color: isSelected ? HomeScreen.primaryColor : Colors.transparent,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isSelected ? Colors.transparent : Colors.grey.shade300,
                       ),
                     ),
-                  );
-                },
-              ),
-            ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          DateFormat.E('es_ES').format(day).substring(0, 3), 
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isSelected ? Colors.white : Colors.black54,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          day.day.toString(),
+                          style: TextStyle(
+                            fontSize: 18,
+                            color: isSelected ? Colors.white : Colors.black,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        if (hasTasks) 
+                          Container(
+                            margin: const EdgeInsets.only(top: 4),
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: isSelected ? Colors.white : HomeScreen.primaryColor,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        if (!hasTasks) const SizedBox(height: 10),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
           ),
-          const SizedBox(height: 12),
-
-          // 3. Fecha actual mostrada debajo de la barra
-          Text(
-            "05 de Septiembre 2025", // Hardcodeado según el prototipo
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey.shade600,
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
