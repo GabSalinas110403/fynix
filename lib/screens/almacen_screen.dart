@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:fynix/widgets/custom_drawer.dart'; 
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
+import 'package:fynix/widgets/custom_drawer.dart';
+import '../widgets/notification_icon.dart';
+import 'home_screen.dart';
 
-class AlmacenScreen extends StatelessWidget {
+class AlmacenScreen extends StatefulWidget {
   const AlmacenScreen({super.key});
 
   static const Color headerColor = Color(0xFF84B9BF);
@@ -9,19 +13,343 @@ class AlmacenScreen extends StatelessWidget {
   static const Color accentGreen = Color(0xFF5B9E9E);
 
   @override
+  State<AlmacenScreen> createState() => _AlmacenScreenState();
+}
+
+class _AlmacenScreenState extends State<AlmacenScreen> {
+  List<Task> allTasks = [];
+  List<Product> products = [];
+  List<Product> productsFiltrados = [];
+  TextEditingController searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTasks();
+    _initializeProducts();
+    searchController.addListener(_filterProducts);
+  }
+
+  @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadTasks() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String? tasksString = prefs.getString('user_tasks');
+
+    if (tasksString != null) {
+      final List<dynamic> taskListJson = jsonDecode(tasksString);
+      setState(() {
+        allTasks = taskListJson.map((json) => Task.fromJson(json)).toList();
+      });
+    }
+  }
+
+  void _initializeProducts() {
+    products = [
+      Product(
+        date: "15 sep 2025",
+        name: "Laptop",
+        sku: "LPT-001",
+        cost: 12000,
+        sale: 15000,
+        stock: 45,
+      ),
+      Product(
+        date: "14 sep 2025",
+        name: "Celular",
+        sku: "CLR-001",
+        cost: 10000,
+        sale: 12500,
+        stock: 120,
+      ),
+      Product(
+        date: "10 sep 2025",
+        name: "Tablet",
+        sku: "TBL-001",
+        cost: 8000,
+        sale: 11000,
+        stock: 30,
+      ),
+    ];
+    productsFiltrados = List.from(products);
+  }
+
+  void _filterProducts() {
+    String query = searchController.text.toLowerCase();
+    setState(() {
+      if (query.isEmpty) {
+        productsFiltrados = List.from(products);
+      } else {
+        productsFiltrados = products.where((product) {
+          return product.name.toLowerCase().contains(query) ||
+              product.sku.toLowerCase().contains(query);
+        }).toList();
+      }
+    });
+  }
+
+  void _agregarProducto() {
+    final nombreController = TextEditingController();
+    final skuController = TextEditingController();
+    final costoController = TextEditingController();
+    final ventaController = TextEditingController();
+    final stockController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Nuevo Producto'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nombreController,
+                decoration: const InputDecoration(
+                  labelText: 'Nombre del Producto',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 15),
+              TextField(
+                controller: skuController,
+                decoration: const InputDecoration(
+                  labelText: 'SKU',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 15),
+              TextField(
+                controller: stockController,
+                decoration: const InputDecoration(
+                  labelText: 'Stock (Cantidad)',
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 15),
+              TextField(
+                controller: costoController,
+                decoration: const InputDecoration(
+                  labelText: 'Costo (MXN)',
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 15),
+              TextField(
+                controller: ventaController,
+                decoration: const InputDecoration(
+                  labelText: 'Precio de Venta (MXN)',
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.number,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (nombreController.text.trim().isEmpty ||
+                  skuController.text.trim().isEmpty) return;
+
+              double costo = double.tryParse(costoController.text) ?? 0.0;
+              double venta = double.tryParse(ventaController.text) ?? 0.0;
+              int stock = int.tryParse(stockController.text) ?? 0;
+
+              setState(() {
+                products.add(
+                  Product(
+                    date: _formatDate(DateTime.now()),
+                    name: nombreController.text.trim(),
+                    sku: skuController.text.trim().toUpperCase(),
+                    cost: costo,
+                    sale: venta,
+                    stock: stock,
+                  ),
+                );
+                _filterProducts();
+              });
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Producto agregado exitosamente')),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AlmacenScreen.accentGreen,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _editarProducto(Product product) async {
+    final nombreController = TextEditingController(text: product.name);
+    final skuController = TextEditingController(text: product.sku);
+    final costoController = TextEditingController(text: product.cost.toStringAsFixed(0));
+    final ventaController = TextEditingController(text: product.sale.toStringAsFixed(0));
+    final stockController = TextEditingController(text: product.stock.toString());
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text("Editar Producto: ${product.name}"),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nombreController,
+                decoration: const InputDecoration(
+                  labelText: "Nombre del Producto",
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 15),
+              TextField(
+                controller: skuController,
+                decoration: const InputDecoration(
+                  labelText: "SKU",
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 15),
+              TextField(
+                controller: stockController,
+                decoration: const InputDecoration(
+                  labelText: "Stock (Cantidad en Almacén)",
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 15),
+              TextField(
+                controller: costoController,
+                decoration: const InputDecoration(
+                  labelText: "Costo (MXN)",
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 15),
+              TextField(
+                controller: ventaController,
+                decoration: const InputDecoration(
+                  labelText: "Precio de Venta (MXN)",
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.number,
+              ),
+            ],
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            child: const Text('Borrar Producto', style: TextStyle(color: Colors.red)),
+            onPressed: () {
+              Navigator.of(dialogContext).pop('DELETE');
+            },
+          ),
+          const Spacer(),
+          TextButton(
+            child: const Text('Cancelar'),
+            onPressed: () {
+              Navigator.of(dialogContext).pop('CANCEL');
+            },
+          ),
+          ElevatedButton(
+            child: const Text('Guardar Cambios'),
+            onPressed: () {
+              try {
+                final newCost = double.parse(costoController.text);
+                final newSale = double.parse(ventaController.text);
+                final newStock = int.parse(stockController.text);
+
+                setState(() {
+                  int index = products.indexWhere((p) => p.sku == product.sku);
+                  if (index != -1) {
+                    products[index] = Product(
+                      date: product.date,
+                      name: nombreController.text.trim(),
+                      sku: skuController.text.trim().toUpperCase(),
+                      cost: newCost,
+                      sale: newSale,
+                      stock: newStock,
+                    );
+                    _filterProducts();
+                  }
+                });
+                Navigator.of(dialogContext).pop('SAVED');
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Error: Asegúrate de que los campos sean números válidos.'),
+                  ),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AlmacenScreen.accentGreen,
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted) return;
+
+    if (result == 'DELETE') {
+      setState(() {
+        products.removeWhere((p) => p.sku == product.sku);
+        _filterProducts();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Producto ${product.name} (SKU: ${product.sku}) eliminado.'),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+    } else if (result == 'SAVED') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Producto actualizado con éxito.'),
+          backgroundColor: AlmacenScreen.accentGreen,
+        ),
+      );
+    }
+  }
+
+  String _formatDate(DateTime date) {
+    const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    return '${date.day} ${months[date.month - 1]} ${date.year}';
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
-
       drawer: const CustomDrawer(),
       body: CustomScrollView(
         physics: const ClampingScrollPhysics(),
-
         slivers: [
           SliverAppBar(
             pinned: true,
             expandedHeight: 220.0,
-            backgroundColor: headerColor,
-
+            backgroundColor: AlmacenScreen.headerColor,
             leading: Builder(
               builder: (context) => IconButton(
                 icon: const Icon(Icons.menu, color: Colors.white),
@@ -29,19 +357,14 @@ class AlmacenScreen extends StatelessWidget {
               ),
             ),
             actions: [
-              IconButton(
-                icon: const Icon(Icons.notifications_none, color: Colors.white, size: 30),
-                onPressed: () {
-                },
-              ),
+              NotificationIcon(allTasks: allTasks),
               const SizedBox(width: 8),
-            ], 
-            
+            ],
             flexibleSpace: FlexibleSpaceBar(
               centerTitle: true,
               title: Container(),
               background: Container(
-                color: headerColor,
+                color: AlmacenScreen.headerColor,
                 padding: const EdgeInsets.only(top: 80, bottom: 20, left: 16, right: 16),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.end,
@@ -63,19 +386,15 @@ class AlmacenScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 15),
                     ElevatedButton.icon(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Abriendo formulario de nuevo producto...')),
-                        );
-                      },
-                      icon: const Icon(Icons.add, color: headerColor),
+                      onPressed: _agregarProducto,
+                      icon: const Icon(Icons.add, color: AlmacenScreen.headerColor),
                       label: const Text(
                         "Nuevo Producto",
                         style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                       ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.white,
-                        foregroundColor: headerColor,
+                        foregroundColor: AlmacenScreen.headerColor,
                         padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(30),
@@ -88,30 +407,30 @@ class AlmacenScreen extends StatelessWidget {
               ),
             ),
           ),
-          
           SliverToBoxAdapter(
             child: Container(
-              color: listBackgroundColor,
+              color: AlmacenScreen.listBackgroundColor,
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: const Column(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SearchAndFilterBar(),
-                  SizedBox(height: 10),
-                  
-                  ProfitMarginChart(), 
-                  SizedBox(height: 30),
-                  
-                  Padding(
+                  _buildSearchBar(),
+                  const SizedBox(height: 10),
+                  ProfitMarginChart(products: productsFiltrados),
+                  const SizedBox(height: 30),
+                  const Padding(
                     padding: EdgeInsets.only(bottom: 15.0),
                     child: Text(
                       "Productos en Almacén",
-                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black87),
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
                     ),
                   ),
-
-                  ProductList(),
-                  SizedBox(height: 50),
+                  _buildProductsList(),
+                  const SizedBox(height: 50),
                 ],
               ),
             ),
@@ -120,15 +439,8 @@ class AlmacenScreen extends StatelessWidget {
       ),
     );
   }
-}
 
-//  WIDGETS REUTILIZABLES (Segun yo)
-
-class SearchAndFilterBar extends StatelessWidget {
-  const SearchAndFilterBar({super.key});
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildSearchBar() {
     return Container(
       transform: Matrix4.translationValues(0.0, 8.0, 0.0),
       child: Row(
@@ -147,8 +459,9 @@ class SearchAndFilterBar extends StatelessWidget {
                   ),
                 ],
               ),
-              child: const TextField(
-                decoration: InputDecoration(
+              child: TextField(
+                controller: searchController,
+                decoration: const InputDecoration(
                   hintText: "Buscar",
                   hintStyle: TextStyle(color: Colors.black54),
                   border: InputBorder.none,
@@ -158,14 +471,65 @@ class SearchAndFilterBar extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
-          IconButton(
-            icon: const Icon(Icons.filter_list, color: AlmacenScreen.headerColor, size: 30),
-            onPressed: () {
-      
-            },
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.9),
+              borderRadius: BorderRadius.circular(10),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 5,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: IconButton(
+              icon: const Icon(Icons.filter_list, color: AlmacenScreen.headerColor, size: 28),
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Filtros próximamente')),
+                );
+              },
+            ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildProductsList() {
+    if (productsFiltrados.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(40.0),
+          child: Column(
+            children: [
+              Icon(
+                Icons.inventory_2_outlined,
+                size: 64,
+                color: Colors.grey[400],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'No se encontraron productos',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      children: productsFiltrados.map((product) {
+        return ProductCard(
+          product: product,
+          onEdit: () => _editarProducto(product),
+        );
+      }).toList(),
     );
   }
 }
@@ -176,182 +540,116 @@ class Product {
   final String sku;
   final double cost;
   final double sale;
-  final int stock; 
-  
+  final int stock;
+
   Product({
     required this.date,
     required this.name,
     required this.sku,
     required this.cost,
     required this.sale,
-    required this.stock, 
+    required this.stock,
   });
 
-  Product copyWith({
-    String? date,
-    String? name,
-    String? sku,
-    double? cost,
-    double? sale,
-    int? stock,
-  }) {
-    return Product(
-      date: date ?? this.date,
-      name: name ?? this.name,
-      sku: sku ?? this.sku,
-      cost: cost ?? this.cost,
-      sale: sale ?? this.sale,
-      stock: stock ?? this.stock,
-    );
-  }
-
   double get profit => sale - cost;
-  double get margin => (profit / sale) * 100;
-}
-
-class ProductList extends StatelessWidget {
-  const ProductList({super.key});
-
-  static final List<Product> products = [
-    Product(
-      date: "15 sep 2025",
-      name: "Laptop",
-      sku: "LPT-001",
-      cost: 12000,
-      sale: 15000,
-      stock: 45, 
-    ),
-    Product(
-      date: "14 sep 2025",
-      name: "Celular",
-      sku: "CLR-001",
-      cost: 10000,
-      sale: 12500,
-      stock: 120, 
-    ),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: products.map((product) {
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 15.0),
-          child: ProductCard(product: product),
-        );
-      }).toList(),
-    );
-  }
+  double get margin => cost > 0 ? (profit / sale) * 100 : 0;
 }
 
 class ProductCard extends StatelessWidget {
   final Product product;
-  const ProductCard({super.key, required this.product});
+  final VoidCallback onEdit;
 
-  void _editProduct(BuildContext context) async {
-    final result = await showDialog<Product?>(
-      context: context,
-      builder: (BuildContext dialogContext) {
-        return ProductEditDialog(product: product);
-      },
-    );
-
-    if (result == null) {
-      return;
-    }
-
-    if (result.name == 'DELETE') {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Simulación: Producto ${product.name} (SKU: ${product.sku}) ha sido ELIMINADO.'),
-          backgroundColor: Colors.red.shade700,
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Simulación: Producto ${result.name} (Stock: ${result.stock}) actualizado con éxito.',
-          ),
-          backgroundColor: AlmacenScreen.accentGreen,
-        ),
-      );
-    }
-  }
+  const ProductCard({
+    super.key,
+    required this.product,
+    required this.onEdit,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 3,
-      color: Colors.white, 
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: InkWell(
-        onTap: () => _editProduct(context),
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    product.date,
-                    style: const TextStyle(fontSize: 14, color: Colors.black54),
-                  ),
-                  Text(
-                    "SKU: ${product.sku}",
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AlmacenScreen.headerColor),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-
-              Row( 
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    product.name,
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87),
-                  ),
-                  Text(
-                    "Stock: ${product.stock}",
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: product.stock < 50 ? Colors.red.shade700 : AlmacenScreen.headerColor,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 15.0),
+      child: Card(
+        elevation: 3,
+        color: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: InkWell(
+          onTap: onEdit,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      product.date,
+                      style: const TextStyle(fontSize: 14, color: Colors.black54),
                     ),
-                  ),
-                ],
-              ),
-              
-              const SizedBox(height: 12),
-
-              _FinanceDetail(
-                label: "Costo",
-                value: "\$${product.cost.toStringAsFixed(0)} MXN",
-                color: Colors.black54,
-              ),
-              _FinanceDetail(
-                label: "Venta",
-                value: "\$${product.sale.toStringAsFixed(0)} MXN",
-                color: AlmacenScreen.accentGreen,
-              ),
-              _FinanceDetail(
-                label: "Ganancia",
-                value: "\$${product.profit.toStringAsFixed(0)} MXN",
-                color: AlmacenScreen.accentGreen,
-              ),
-              _FinanceDetail(
-                label: "Margen",
-                value: "${product.margin.toStringAsFixed(2)}%",
-                color: AlmacenScreen.accentGreen,
-                isBold: true,
-              ),
-            ],
+                    Text(
+                      "SKU: ${product.sku}",
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: AlmacenScreen.headerColor,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        product.name,
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      "Stock: ${product.stock}",
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: product.stock < 50
+                            ? Colors.red.shade700
+                            : AlmacenScreen.headerColor,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                _FinanceDetail(
+                  label: "Costo",
+                  value: "\$${product.cost.toStringAsFixed(0)} MXN",
+                  color: Colors.black54,
+                ),
+                _FinanceDetail(
+                  label: "Venta",
+                  value: "\$${product.sale.toStringAsFixed(0)} MXN",
+                  color: AlmacenScreen.accentGreen,
+                ),
+                _FinanceDetail(
+                  label: "Ganancia",
+                  value: "\$${product.profit.toStringAsFixed(0)} MXN",
+                  color: AlmacenScreen.accentGreen,
+                ),
+                _FinanceDetail(
+                  label: "Margen",
+                  value: "${product.margin.toStringAsFixed(2)}%",
+                  color: AlmacenScreen.accentGreen,
+                  isBold: true,
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -402,12 +700,16 @@ class _FinanceDetail extends StatelessWidget {
 }
 
 class ProfitMarginChart extends StatelessWidget {
-  const ProfitMarginChart({super.key});
+  final List<Product> products;
+
+  const ProfitMarginChart({super.key, required this.products});
 
   @override
   Widget build(BuildContext context) {
-    final List<Product> products = ProductList.products;
-    
+    if (products.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
     return Card(
       elevation: 3,
       color: Colors.white,
@@ -421,30 +723,34 @@ class ProfitMarginChart extends StatelessWidget {
           children: [
             const Text(
               "Margen de Ganancia por Producto",
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87),
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
             ),
             const SizedBox(height: 20),
-            
             Container(
-              height: 150,
-              width: double.infinity,
-              padding: const EdgeInsets.only(left: 10, right: 10, bottom: 5, top: 5),
+              constraints: BoxConstraints(
+                maxHeight: products.length * 55.0,
+              ),
               child: ListView.builder(
                 physics: const NeverScrollableScrollPhysics(),
+                shrinkWrap: true,
                 itemCount: products.length,
                 itemBuilder: (context, index) {
                   final product = products[index];
-                  final barValue = product.margin / 100; 
+                  final barValue = product.margin / 100;
 
                   return Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8.0),
                     child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         SizedBox(
                           width: 80,
                           child: Text(
-                            "${product.name}\nSKU: ${product.sku.substring(4)}",
+                            "${product.name}\nSKU: ${product.sku.length > 7 ? product.sku.substring(4) : product.sku}",
                             style: const TextStyle(fontSize: 11, color: Colors.black54),
                           ),
                         ),
@@ -461,7 +767,9 @@ class ProfitMarginChart extends StatelessWidget {
                                 ),
                               ),
                               Container(
-                                width: MediaQuery.of(context).size.width * 0.5 * barValue,
+                                width: MediaQuery.of(context).size.width *
+                                    0.5 *
+                                    barValue.clamp(0.0, 1.0),
                                 height: 25,
                                 decoration: BoxDecoration(
                                   color: AlmacenScreen.accentGreen.withOpacity(0.7),
@@ -491,139 +799,6 @@ class ProfitMarginChart extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-
-class ProductEditDialog extends StatefulWidget {
-  final Product product;
-
-  const ProductEditDialog({
-    super.key,
-    required this.product,
-  });
-
-  @override
-  State<ProductEditDialog> createState() => _ProductEditDialogState();
-}
-
-class _ProductEditDialogState extends State<ProductEditDialog> {
-  late TextEditingController _nameController;
-  late TextEditingController _skuController;
-  late TextEditingController _costController;
-  late TextEditingController _saleController;
-  late TextEditingController _stockController;
-
-  @override
-  void initState() {
-    super.initState();
-    _nameController = TextEditingController(text: widget.product.name);
-    _skuController = TextEditingController(text: widget.product.sku);
-    _costController = TextEditingController(text: widget.product.cost.toStringAsFixed(0));
-    _saleController = TextEditingController(text: widget.product.sale.toStringAsFixed(0));
-    _stockController = TextEditingController(text: widget.product.stock.toString());
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _skuController.dispose();
-    _costController.dispose();
-    _saleController.dispose();
-    _stockController.dispose();
-    super.dispose();
-  }
-
-  Product? _trySaveProduct() {
-    try {
-      final newCost = double.parse(_costController.text);
-      final newSale = double.parse(_saleController.text);
-      final newStock = int.parse(_stockController.text);
-
-      return widget.product.copyWith(
-        name: _nameController.text,
-        sku: _skuController.text,
-        cost: newCost,
-        sale: newSale,
-        stock: newStock,
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error: Asegúrate de que los campos Costo, Venta y Stock sean números válidos.')),
-      );
-      return null;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text("Editar Producto: ${widget.product.name}"),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: _nameController,
-              decoration: const InputDecoration(labelText: "Nombre del Producto"),
-            ),
-            TextField(
-              controller: _skuController,
-              decoration: const InputDecoration(labelText: "SKU"),
-            ),
-            
-            const SizedBox(height: 15),
-
-            TextField(
-              controller: _stockController,
-              decoration: const InputDecoration(labelText: "Stock (Cantidad en Almacén)"),
-              keyboardType: TextInputType.number,
-            ),
-
-            TextField(
-              controller: _costController,
-              decoration: const InputDecoration(labelText: "Costo (\$ MXN)"),
-              keyboardType: TextInputType.number,
-            ),
-            TextField(
-              controller: _saleController,
-              decoration: const InputDecoration(labelText: "Precio de Venta (\$ MXN)"),
-              keyboardType: TextInputType.number,
-            ),
-          ],
-        ),
-      ),
-      actions: <Widget>[
-        TextButton(
-          child: const Text('Borrar Producto', style: TextStyle(color: Colors.red)),
-          onPressed: () {
-            Navigator.of(context).pop(widget.product.copyWith(name: 'DELETE'));
-          },
-        ),
-
-        const Spacer(),
-
-        TextButton(
-          child: const Text('Cancelar'),
-          onPressed: () {
-            Navigator.of(context).pop(null); 
-          },
-        ),
-        ElevatedButton(
-          child: const Text('Guardar Cambios'),
-          onPressed: () {
-            final updatedProduct = _trySaveProduct();
-            if (updatedProduct != null) {
-              Navigator.of(context).pop(updatedProduct);
-            }
-          },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AlmacenScreen.accentGreen,
-            foregroundColor: Colors.white,
-          ),
-        ),
-      ],
     );
   }
 }

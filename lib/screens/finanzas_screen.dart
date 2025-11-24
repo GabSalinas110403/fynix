@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // NECESARIO PARA PERSISTENCIA
+import 'dart:convert'; // NECESARIO PARA JSON
 import '../widgets/custom_drawer.dart';
+import '../widgets/notification_icon.dart'; // IMPORTAR EL WIDGET DE NOTIFICACIONES
+import 'home_screen.dart'; // IMPORTAR PARA ACCEDER A LA CLASE Task
 
 class FinanzasScreen extends StatefulWidget {
   const FinanzasScreen({super.key});
@@ -12,6 +16,27 @@ class FinanzasScreen extends StatefulWidget {
 
 class _FinanzasScreenState extends State<FinanzasScreen> {
   List<Map<String, dynamic>> registros = [];
+  List<Task> allTasks = []; // LISTA DE TAREAS PARA LAS NOTIFICACIONES
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTasks(); // CARGAR TAREAS AL INICIAR
+  }
+
+  // CARGAR TAREAS DESDE SharedPreferences (igual que en home_screen)
+  Future<void> _loadTasks() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String? tasksString = prefs.getString('user_tasks');
+
+    if (tasksString != null) {
+      final List<dynamic> taskListJson = jsonDecode(tasksString);
+      setState(() {
+        allTasks = taskListJson.map((json) => Task.fromJson(json)).toList();
+      });
+    }
+  }
+
   void _abrirModal(bool esIngreso) {
     final TextEditingController nombreCtrl = TextEditingController();
     final TextEditingController cantidadCtrl = TextEditingController();
@@ -78,8 +103,8 @@ class _FinanzasScreenState extends State<FinanzasScreen> {
       ..sort((a, b) => a["fecha"].compareTo(b["fecha"]));
 
     return sorted.asMap().entries.map((entry) {
-      final index = entry.key; // número del registro
-      final e = entry.value; // datos del registro
+      final index = entry.key;
+      final e = entry.value;
 
       double cantidad = e["cantidad"].toDouble();
       double y = e["tipo"] == "ingreso" ? cantidad : -cantidad;
@@ -127,14 +152,9 @@ class _FinanzasScreenState extends State<FinanzasScreen> {
                             ),
                           ),
                           const Spacer(),
-                          IconButton(
-                            icon: const Icon(
-                              Icons.notifications_none,
-                              color: Colors.white,
-                              size: 28,
-                            ),
-                            onPressed: () {},
-                          ),
+                          // USAR EL WIDGET NotificationIcon REUTILIZABLE
+                          NotificationIcon(allTasks: allTasks),
+                          const SizedBox(width: 8),
                         ],
                       ),
                     ),
