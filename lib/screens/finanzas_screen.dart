@@ -1,26 +1,114 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
-import '../widgets/custom_drawer.dart'; // asegúrate de importar tu drawer
+import '../widgets/custom_drawer.dart';
 
-class FinanzasScreen extends StatelessWidget {
+class FinanzasScreen extends StatefulWidget {
   const FinanzasScreen({super.key});
+
+  @override
+  State<FinanzasScreen> createState() => _FinanzasScreenState();
+}
+
+class _FinanzasScreenState extends State<FinanzasScreen> {
+  List<Map<String, dynamic>> registros = [];
+  void _abrirModal(bool esIngreso) {
+    final TextEditingController nombreCtrl = TextEditingController();
+    final TextEditingController cantidadCtrl = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text(esIngreso ? "Nuevo Ingreso" : "Nuevo Gasto"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nombreCtrl,
+                decoration: InputDecoration(
+                  labelText: esIngreso
+                      ? "Nombre del ingreso"
+                      : "Nombre del gasto",
+                ),
+              ),
+              TextField(
+                controller: cantidadCtrl,
+                decoration: const InputDecoration(labelText: "Cantidad (MXN)"),
+                keyboardType: TextInputType.number,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancelar"),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                String nombre = nombreCtrl.text.trim();
+                double? cantidad = double.tryParse(cantidadCtrl.text);
+
+                if (nombre.isEmpty || cantidad == null) return;
+
+                setState(() {
+                  registros.add({
+                    "tipo": esIngreso ? "ingreso" : "gasto",
+                    "nombre": nombre,
+                    "cantidad": cantidad,
+                    "fecha": DateTime.now(),
+                  });
+                });
+
+                Navigator.pop(context);
+              },
+              child: const Text("Guardar"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  List<FlSpot> _generarSpots() {
+    final sorted = List<Map<String, dynamic>>.from(registros)
+      ..sort((a, b) => a["fecha"].compareTo(b["fecha"]));
+
+    return sorted.asMap().entries.map((entry) {
+      final index = entry.key; // número del registro
+      final e = entry.value; // datos del registro
+
+      double cantidad = e["cantidad"].toDouble();
+      double y = e["tipo"] == "ingreso" ? cantidad : -cantidad;
+
+      return FlSpot(index.toDouble(), y);
+    }).toList();
+  }
+
+  double get totalIngresos => registros
+      .where((e) => e["tipo"] == "ingreso")
+      .fold(0.0, (s, e) => s + e["cantidad"]);
+
+  double get totalGastos => registros
+      .where((e) => e["tipo"] == "gasto")
+      .fold(0.0, (s, e) => s + e["cantidad"]);
 
   @override
   Widget build(BuildContext context) {
     final String fechaHoy = DateFormat(
       'dd MMM yyyy',
       'es',
-    ).format(DateTime(2025, 10, 27));
+    ).format(DateTime.now());
 
     return Scaffold(
       drawer: const CustomDrawer(),
-
       body: SafeArea(
         child: SingleChildScrollView(
           child: Column(
             children: [
-             
               Container(
                 color: const Color(0xFF84B9BF),
                 padding: const EdgeInsets.only(bottom: 25, top: 10),
@@ -45,12 +133,10 @@ class FinanzasScreen extends StatelessWidget {
                               color: Colors.white,
                               size: 28,
                             ),
-                            onPressed: () {
-                           
-                            },
+                            onPressed: () {},
                           ),
                         ],
-                      ),  
+                      ),
                     ),
 
                     const Text(
@@ -69,12 +155,12 @@ class FinanzasScreen extends StatelessWidget {
 
                     const SizedBox(height: 15),
 
-                    // Botones centrados
+                    // Botones con modal
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         ElevatedButton(
-                          onPressed: () {},
+                          onPressed: () => _abrirModal(true),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.white,
                             foregroundColor: const Color(0xFF06373E),
@@ -86,7 +172,7 @@ class FinanzasScreen extends StatelessWidget {
                         ),
                         const SizedBox(width: 15),
                         ElevatedButton(
-                          onPressed: () {},
+                          onPressed: () => _abrirModal(false),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.white,
                             foregroundColor: const Color(0xFF06373E),
@@ -104,7 +190,7 @@ class FinanzasScreen extends StatelessWidget {
 
               const SizedBox(height: 20),
 
-              // 🟩 Container de información
+              // Panel de información dinamico
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 20),
                 padding: const EdgeInsets.all(20),
@@ -114,8 +200,8 @@ class FinanzasScreen extends StatelessWidget {
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Row(
+                  children: [
+                    const Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
@@ -134,21 +220,21 @@ class FinanzasScreen extends StatelessWidget {
                         ),
                       ],
                     ),
-                    SizedBox(height: 10),
+                    const SizedBox(height: 10),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          '\$15,000 MXN',
-                          style: TextStyle(
+                          '\$${totalIngresos.toStringAsFixed(2)} MXN',
+                          style: const TextStyle(
                             color: Color(0xFF06373E),
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                         Text(
-                          '+\$7,650 MXN',
-                          style: TextStyle(
+                          '\$${(totalIngresos - totalGastos).toStringAsFixed(2)} MXN',
+                          style: const TextStyle(
                             color: Color(0xFF06373E),
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -156,15 +242,15 @@ class FinanzasScreen extends StatelessWidget {
                         ),
                       ],
                     ),
-                    SizedBox(height: 15),
-                    Text(
+                    const SizedBox(height: 15),
+                    const Text(
                       'Gastos Totales',
                       style: TextStyle(color: Color(0xFF06373E), fontSize: 16),
                     ),
-                    SizedBox(height: 5),
+                    const SizedBox(height: 5),
                     Text(
-                      '\$7,350 MXN',
-                      style: TextStyle(
+                      '\$${totalGastos.toStringAsFixed(2)} MXN',
+                      style: const TextStyle(
                         color: Color(0xFF06373E),
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -176,7 +262,7 @@ class FinanzasScreen extends StatelessWidget {
 
               const SizedBox(height: 20),
 
-              // 🟩 Container de registros
+              // Lista dinámica de registros
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 20),
                 padding: const EdgeInsets.all(16),
@@ -187,56 +273,39 @@ class FinanzasScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Fecha y total
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          fechaHoy,
-                          style: TextStyle(
-                            color: Colors.grey.shade600,
-                            fontSize: 14,
-                          ),
-                        ),
-                        Text(
-                          '+7,650 MXN',
-                          style: TextStyle(
-                            color: Colors.grey.shade600,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ],
+                    Text(
+                      fechaHoy,
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 14,
+                      ),
                     ),
                     const SizedBox(height: 15),
 
-                    // Lista de items
-                    _buildItem(
-                      'Laptop',
-                      '+\$15,000',
-                      const Color(0xFF06373E),
-                      Colors.white,
-                    ),
-                    const SizedBox(height: 10),
-                    _buildItem(
-                      'Celular',
-                      '-\$5,000',
-                      const Color(0xFFE1EDE9),
-                      Colors.black87,
-                    ),
-                    const SizedBox(height: 10),
-                    _buildItem(
-                      'Electricidad',
-                      '-\$2,350',
-                      const Color(0xFFE1EDE9),
-                      Colors.black87,
+                    ...registros.reversed.map(
+                      (e) => Column(
+                        children: [
+                          _buildItem(
+                            e["nombre"],
+                            (e["tipo"] == "ingreso" ? "+ " : "- ") +
+                                "\$${e["cantidad"].toStringAsFixed(2)}",
+                            e["tipo"] == "ingreso"
+                                ? const Color(0xFF06373E)
+                                : const Color(0xFFE1EDE9),
+                            e["tipo"] == "ingreso"
+                                ? Colors.white
+                                : Colors.black87,
+                          ),
+                          const SizedBox(height: 10),
+                        ],
+                      ),
                     ),
                   ],
                 ),
               ),
 
               const SizedBox(height: 20),
-
-              // 🟩 Gráfica
+              // Gráfica dinámica
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 20),
                 padding: const EdgeInsets.all(16),
@@ -252,17 +321,11 @@ class FinanzasScreen extends StatelessWidget {
                     gridData: FlGridData(show: false),
                     lineBarsData: [
                       LineChartBarData(
-                        spots: [
-                          FlSpot(0, 400),
-                          FlSpot(2, 600),
-                          FlSpot(4, 800),
-                          FlSpot(6, 300),
-                          FlSpot(8, 700),
-                        ],
+                        spots: _generarSpots(),
                         isCurved: true,
                         color: const Color(0xFF84B9BF),
                         barWidth: 3,
-                        dotData: FlDotData(show: false),
+                        dotData: FlDotData(show: true),
                         belowBarData: BarAreaData(
                           show: true,
                           color: const Color(0xFF84B9BF).withOpacity(0.3),
@@ -281,13 +344,7 @@ class FinanzasScreen extends StatelessWidget {
     );
   }
 
-  // 🟩 Widget para los rectángulos de items
-  static Widget _buildItem(
-    String nombre,
-    String monto,
-    Color color,
-    Color textColor,
-  ) {
+  Widget _buildItem(String nombre, String monto, Color color, Color textColor) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       decoration: BoxDecoration(
