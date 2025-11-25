@@ -4,6 +4,9 @@ import 'dart:convert';
 import 'package:fynix/widgets/custom_drawer.dart';
 import '../widgets/notification_icon.dart';
 import 'home_screen.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 
 class AlmacenScreen extends StatefulWidget {
   const AlmacenScreen({super.key});
@@ -11,6 +14,7 @@ class AlmacenScreen extends StatefulWidget {
   static const Color headerColor = Color(0xFF84B9BF);
   static const Color listBackgroundColor = Color(0xFFE0F2F1);
   static const Color accentGreen = Color(0xFF5B9E9E);
+  static const Color textColor = Color(0xFF06373E); 
 
   @override
   State<AlmacenScreen> createState() => _AlmacenScreenState();
@@ -21,6 +25,10 @@ class _AlmacenScreenState extends State<AlmacenScreen> {
   List<Product> products = [];
   List<Product> productsFiltrados = [];
   TextEditingController searchController = TextEditingController();
+
+  // --- Filtros avanzados ---
+  String? filtroCampoSeleccionado; // 'name', 'sku'
+  String? filtroMesSeleccionado;
 
   @override
   void initState() {
@@ -79,17 +87,310 @@ class _AlmacenScreenState extends State<AlmacenScreen> {
   }
 
   void _filterProducts() {
-    String query = searchController.text.toLowerCase();
+    String query = searchController.text.toLowerCase().trim();
     setState(() {
-      if (query.isEmpty) {
-        productsFiltrados = List.from(products);
-      } else {
-        productsFiltrados = products.where((product) {
-          return product.name.toLowerCase().contains(query) ||
-              product.sku.toLowerCase().contains(query);
-        }).toList();
-      }
+      productsFiltrados = products.where((product) {
+        // Filtro de búsqueda por texto según el campo seleccionado
+        bool matchesSearch = query.isEmpty;
+
+        if (!matchesSearch && query.isNotEmpty) {
+          if (filtroCampoSeleccionado == null) {
+            // Si no hay campo seleccionado, buscar en Nombre y SKU
+            matchesSearch = product.name.toLowerCase().contains(query) ||
+                product.sku.toLowerCase().contains(query);
+          } else if (filtroCampoSeleccionado == 'name') {
+            matchesSearch = product.name.toLowerCase().contains(query);
+          } else if (filtroCampoSeleccionado == 'sku') {
+            matchesSearch = product.sku.toLowerCase().contains(query);
+          }
+        } else {
+          matchesSearch = true;
+        }
+
+        // Filtro por mes de registro (fecha)
+        bool matchesMes = true;
+        if (filtroMesSeleccionado != null) {
+          matchesMes = product.date.toLowerCase().contains(filtroMesSeleccionado!.toLowerCase());
+        }
+
+        return matchesSearch && matchesMes;
+      }).toList();
     });
+  }
+
+  // Función para obtener el nombre legible del campo de filtro
+  String _getNombreCampo(String campo) {
+    switch (campo) {
+      case 'name':
+        return 'Nombre';
+      case 'sku':
+        return 'SKU';
+      default:
+        return '';
+    }
+  }
+  
+  // Implementación del ModalBottomSheet para filtros
+  void _mostrarFiltros() {
+    final meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        String? tempFiltroCampo = filtroCampoSeleccionado;
+        String? tempFiltroMes = filtroMesSeleccionado;
+
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return SingleChildScrollView(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+                  top: 20,
+                  left: 20,
+                  right: 20,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Filtros',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: AlmacenScreen.textColor,
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            setModalState(() {
+                              tempFiltroCampo = null;
+                              tempFiltroMes = null;
+                            });
+                          },
+                          child: const Text('Limpiar', style: TextStyle(color: AlmacenScreen.headerColor)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      'Buscar por Campo',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AlmacenScreen.textColor),
+                    ),
+                    const SizedBox(height: 10),
+                    const Text(
+                      'Selecciona en qué campo buscar (si no seleccionas, buscará en Nombre y SKU)',
+                      style: TextStyle(fontSize: 12, color: Colors.black54),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 10,
+                      children: [
+                        FilterChip(
+                          label: const Text('Nombre'),
+                          selected: tempFiltroCampo == 'name',
+                          onSelected: (selected) {
+                            setModalState(() {
+                              tempFiltroCampo = selected ? 'name' : null;
+                            });
+                          },
+                          selectedColor: AlmacenScreen.headerColor.withOpacity(0.3),
+                        ),
+                        FilterChip(
+                          label: const Text('SKU'),
+                          selected: tempFiltroCampo == 'sku',
+                          onSelected: (selected) {
+                            setModalState(() {
+                              tempFiltroCampo = selected ? 'sku' : null;
+                            });
+                          },
+                          selectedColor: AlmacenScreen.headerColor.withOpacity(0.3),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      'Filtrar por Mes de Registro',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AlmacenScreen.textColor),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: meses.map((mes) {
+                        return FilterChip(
+                          label: Text(mes.toUpperCase()),
+                          selected: tempFiltroMes == mes,
+                          onSelected: (selected) {
+                            setModalState(() {
+                              tempFiltroMes = selected ? mes : null;
+                            });
+                          },
+                          selectedColor: AlmacenScreen.headerColor.withOpacity(0.5),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          setState(() {
+                            filtroCampoSeleccionado = tempFiltroCampo;
+                            filtroMesSeleccionado = tempFiltroMes;
+                          });
+                          _filterProducts();
+                          Navigator.pop(context);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AlmacenScreen.headerColor,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 15),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: const Text(
+                          'Aplicar Filtros',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // Función de exportar a PDF (actualizada para incluir filtros)
+  Future<void> _exportToPDF() async {
+    if (productsFiltrados.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No hay resultados para exportar')),
+      );
+      return;
+    }
+    
+    final pdf = pw.Document();
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(32),
+        build: (pw.Context context) {
+          return [
+            // Encabezado
+            pw.Header(
+              level: 0,
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    'Reporte de Almacén',
+                    style: pw.TextStyle(
+                      fontSize: 24,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColor.fromHex('#84B9BF'),
+                    ),
+                  ),
+                  pw.SizedBox(height: 8),
+                  pw.Text(
+                    'Fecha de generación: ${_formatDate(DateTime.now())}',
+                    style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey700),
+                  ),
+                  if (filtroCampoSeleccionado != null || filtroMesSeleccionado != null) ...[
+                    pw.SizedBox(height: 8),
+                    pw.Text(
+                      'Filtros aplicados:',
+                      style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
+                    ),
+                    if (filtroCampoSeleccionado != null)
+                      pw.Text(
+                        '• Campo: ${_getNombreCampo(filtroCampoSeleccionado!)}',
+                        style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700),
+                      ),
+                    if (filtroMesSeleccionado != null)
+                      pw.Text(
+                        '• Mes: ${filtroMesSeleccionado!.toUpperCase()}',
+                        style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700),
+                      ),
+                  ],
+                  pw.SizedBox(height: 4),
+                  pw.Text(
+                    'Total de resultados: ${productsFiltrados.length}',
+                    style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
+                  ),
+                  pw.Divider(thickness: 2, color: PdfColor.fromHex('#84B9BF')),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 20),
+            
+            // Tabla de Productos
+            pw.Text(
+              'Resumen de Productos',
+              style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
+            ),
+            pw.SizedBox(height: 15),
+            pw.Table.fromTextArray(
+              headers: ['Producto', 'SKU', 'Stock', 'Costo', 'Venta', 'Ganancia', 'Margen'],
+              data: productsFiltrados.map((product) {
+                return [
+                  product.name,
+                  product.sku,
+                  product.stock.toString(),
+                  '\$${product.cost.toStringAsFixed(0)}',
+                  '\$${product.sale.toStringAsFixed(0)}',
+                  '\$${product.profit.toStringAsFixed(0)}',
+                  '${product.margin.toStringAsFixed(2)}%',
+                ];
+              }).toList(),
+              headerStyle: pw.TextStyle(
+                fontWeight: pw.FontWeight.bold,
+                fontSize: 10,
+              ),
+              cellStyle: const pw.TextStyle(fontSize: 9),
+              headerDecoration: const pw.BoxDecoration(
+                color: PdfColors.grey300,
+              ),
+              cellAlignment: pw.Alignment.centerLeft,
+            ),
+            pw.SizedBox(height: 30),
+            // Estadísticas (se mantienen igual)
+            pw.Text(
+              'Estadísticas',
+              style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
+            ),
+            pw.SizedBox(height: 10),
+            pw.Text('Total de productos: ${productsFiltrados.length}'),
+            pw.Text(
+              'Stock total: ${productsFiltrados.fold<int>(0, (sum, p) => sum + p.stock)}',
+            ),
+            pw.Text(
+              'Valor total en inventario: \$${productsFiltrados.fold<double>(0, (sum, p) => sum + (p.cost * p.stock)).toStringAsFixed(0)} MXN',
+            ),
+          ];
+        },
+      ),
+    );
+
+    await Printing.layoutPdf(
+      onLayout: (PdfPageFormat format) async => pdf.save(),
+      name: 'Almacen_${DateTime.now().millisecondsSinceEpoch}.pdf',
+    );
   }
 
   void _agregarProducto() {
@@ -385,22 +686,27 @@ class _AlmacenScreenState extends State<AlmacenScreen> {
                       ),
                     ),
                     const SizedBox(height: 15),
-                    ElevatedButton.icon(
-                      onPressed: _agregarProducto,
-                      icon: const Icon(Icons.add, color: AlmacenScreen.headerColor),
-                      label: const Text(
-                        "Nuevo Producto",
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: AlmacenScreen.headerColor,
-                        padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: _agregarProducto,
+                          icon: const Icon(Icons.add, color: AlmacenScreen.headerColor),
+                          label: const Text(
+                            "Nuevo Producto",
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: AlmacenScreen.headerColor,
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(30),
+                            ),
+                            elevation: 5,
+                          ),
                         ),
-                        elevation: 5,
-                      ),
+                      ],
                     ),
                   ],
                 ),
@@ -410,26 +716,41 @@ class _AlmacenScreenState extends State<AlmacenScreen> {
           SliverToBoxAdapter(
             child: Container(
               color: AlmacenScreen.listBackgroundColor,
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildSearchBar(),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                    child: _buildSearchBarAndFilter(),
+                  ),
                   const SizedBox(height: 10),
-                  ProfitMarginChart(products: productsFiltrados),
-                  const SizedBox(height: 30),
-                  const Padding(
-                    padding: EdgeInsets.only(bottom: 15.0),
-                    child: Text(
-                      "Productos en Almacén",
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                    child: _buildExportButton(),
+                  ),
+                  const SizedBox(height: 20),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ProfitMarginChart(products: productsFiltrados),
+                        const SizedBox(height: 20),
+                        const Padding(
+                          padding: EdgeInsets.only(bottom: 15.0),
+                          child: Text(
+                            "Productos en Almacén",
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87,
+                            ),
+                          ),
+                        ),
+                        _buildProductsList(),
+                      ],
                     ),
                   ),
-                  _buildProductsList(),
                   const SizedBox(height: 50),
                 ],
               ),
@@ -440,17 +761,48 @@ class _AlmacenScreenState extends State<AlmacenScreen> {
     );
   }
 
-  Widget _buildSearchBar() {
-    return Container(
-      transform: Matrix4.translationValues(0.0, 8.0, 0.0),
-      child: Row(
-        children: [
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
+  // --- Widget de Barra de Búsqueda y Filtros ---
+  Widget _buildSearchBarAndFilter() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 0),
+      child: Container(
+        transform: Matrix4.translationValues(0.0, 6.0, 0.0),
+        child: Row(
+          children: [
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.9),
+                  borderRadius: BorderRadius.circular(15),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 5,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: TextField(
+                  controller: searchController,
+                  decoration: InputDecoration(
+                    hintText: filtroCampoSeleccionado == null 
+                        ? "Buscar . . ." 
+                        : "Buscar en ${_getNombreCampo(filtroCampoSeleccionado!)}...",
+                    hintStyle: const TextStyle(color: Colors.black54),
+                    border: InputBorder.none,
+                    icon: const Icon(Icons.search, color: AlmacenScreen.headerColor),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Container(
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.9),
-                borderRadius: BorderRadius.circular(15),
+                color: filtroCampoSeleccionado != null || filtroMesSeleccionado != null
+                    ? AlmacenScreen.headerColor
+                    : Colors.white.withOpacity(0.9),
+                borderRadius: BorderRadius.circular(10),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.05),
@@ -459,40 +811,47 @@ class _AlmacenScreenState extends State<AlmacenScreen> {
                   ),
                 ],
               ),
-              child: TextField(
-                controller: searchController,
-                decoration: const InputDecoration(
-                  hintText: "Buscar",
-                  hintStyle: TextStyle(color: Colors.black54),
-                  border: InputBorder.none,
-                  icon: Icon(Icons.search, color: AlmacenScreen.headerColor),
+              child: IconButton(
+                icon: Icon(
+                  Icons.filter_list, 
+                  color: filtroCampoSeleccionado != null || filtroMesSeleccionado != null
+                      ? Colors.white
+                      : AlmacenScreen.headerColor, 
+                  size: 28
                 ),
+                onPressed: _mostrarFiltros,
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // --- Widget del Botón de Exportar a PDF ---
+  Widget _buildExportButton() {
+    return Container(
+      transform: Matrix4.translationValues(0.0, 6.0, 0.0),
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: _exportToPDF,
+        icon: const Icon(Icons.picture_as_pdf, size: 20),
+        label: const Text(
+          'Exportar resultados a PDF',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
           ),
-          const SizedBox(width: 10),
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.9),
-              borderRadius: BorderRadius.circular(10),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 5,
-                  offset: const Offset(0, 3),
-                ),
-              ],
-            ),
-            child: IconButton(
-              icon: const Icon(Icons.filter_list, color: AlmacenScreen.headerColor, size: 28),
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Filtros próximamente')),
-                );
-              },
-            ),
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AlmacenScreen.headerColor,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
           ),
-        ],
+          elevation: 3,
+        ),
       ),
     );
   }
@@ -555,6 +914,9 @@ class Product {
   double get margin => cost > 0 ? (profit / sale) * 100 : 0;
 }
 
+// ==========================================================
+// CLASE MODIFICADA: Se eliminan las filas de Ganancia y Margen.
+// ==========================================================
 class ProductCard extends StatelessWidget {
   final Product product;
   final VoidCallback onEdit;
@@ -568,9 +930,9 @@ class ProductCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 15.0),
+      padding: const EdgeInsets.only(bottom: 12.0),
       child: Card(
-        elevation: 3,
+        elevation: 2,
         color: Colors.white,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
@@ -579,75 +941,79 @@ class ProductCard extends StatelessWidget {
           onTap: onEdit,
           borderRadius: BorderRadius.circular(12),
           child: Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.all(12.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      product.date,
-                      style: const TextStyle(fontSize: 14, color: Colors.black54),
-                    ),
-                    Text(
-                      "SKU: ${product.sku}",
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: AlmacenScreen.headerColor,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            product.name,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            "SKU: ${product.sku}",
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: AlmacenScreen.headerColor,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: product.stock < 50
+                            ? Colors.red.shade50
+                            : AlmacenScreen.headerColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                       child: Text(
-                        product.name,
-                        style: const TextStyle(
-                          fontSize: 20,
+                        "Stock: ${product.stock}",
+                        style: TextStyle(
+                          fontSize: 14,
                           fontWeight: FontWeight.bold,
-                          color: Colors.black87,
+                          color: product.stock < 50
+                              ? Colors.red.shade700
+                              : AlmacenScreen.headerColor,
                         ),
                       ),
                     ),
-                    Text(
-                      "Stock: ${product.stock}",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: product.stock < 50
-                            ? Colors.red.shade700
-                            : AlmacenScreen.headerColor,
+                  ],
+                ),
+                const SizedBox(height: 10),
+                // --- Solo se deja Costo y Venta ---
+                Row(
+                  children: [
+                    Expanded(
+                      child: _CompactFinanceInfo(
+                        label: "Costo",
+                        value: "\$${product.cost.toStringAsFixed(0)}",
+                        color: Colors.black54,
+                      ),
+                    ),
+                    Expanded(
+                      child: _CompactFinanceInfo(
+                        label: "Venta",
+                        value: "\$${product.sale.toStringAsFixed(0)}",
+                        color: AlmacenScreen.accentGreen,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                _FinanceDetail(
-                  label: "Costo",
-                  value: "\$${product.cost.toStringAsFixed(0)} MXN",
-                  color: Colors.black54,
-                ),
-                _FinanceDetail(
-                  label: "Venta",
-                  value: "\$${product.sale.toStringAsFixed(0)} MXN",
-                  color: AlmacenScreen.accentGreen,
-                ),
-                _FinanceDetail(
-                  label: "Ganancia",
-                  value: "\$${product.profit.toStringAsFixed(0)} MXN",
-                  color: AlmacenScreen.accentGreen,
-                ),
-                _FinanceDetail(
-                  label: "Margen",
-                  value: "${product.margin.toStringAsFixed(2)}%",
-                  color: AlmacenScreen.accentGreen,
-                  isBold: true,
-                ),
+                // --- Se eliminaron las filas de Ganancia y Margen ---
               ],
             ),
           ),
@@ -657,13 +1023,13 @@ class ProductCard extends StatelessWidget {
   }
 }
 
-class _FinanceDetail extends StatelessWidget {
+class _CompactFinanceInfo extends StatelessWidget {
   final String label;
   final String value;
   final Color color;
   final bool isBold;
 
-  const _FinanceDetail({
+  const _CompactFinanceInfo({
     required this.label,
     required this.value,
     required this.color,
@@ -672,41 +1038,45 @@ class _FinanceDetail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            "$label:",
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
-              color: Colors.black87,
-            ),
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          "$label:",
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: isBold ? FontWeight.w600 : FontWeight.normal,
+            color: Colors.black87,
           ),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
-              color: color,
-            ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
+            color: color,
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
 
-class ProfitMarginChart extends StatelessWidget {
+class ProfitMarginChart extends StatefulWidget {
   final List<Product> products;
 
   const ProfitMarginChart({super.key, required this.products});
 
   @override
+  State<ProfitMarginChart> createState() => _ProfitMarginChartState();
+}
+
+class _ProfitMarginChartState extends State<ProfitMarginChart> {
+  bool _isExpanded = false;
+
+  @override
   Widget build(BuildContext context) {
-    if (products.isEmpty) {
+    if (widget.products.isEmpty) {
       return const SizedBox.shrink();
     }
 
@@ -716,88 +1086,134 @@ class ProfitMarginChart extends StatelessWidget {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              "Margen de Ganancia por Producto",
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: () {
+              setState(() {
+                _isExpanded = !_isExpanded;
+              });
+            },
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(12),
+              topRight: Radius.circular(12),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    "Margen de Ganancia por Producto",
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  Icon(
+                    _isExpanded 
+                        ? Icons.keyboard_arrow_up 
+                        : Icons.keyboard_arrow_down,
+                    color: AlmacenScreen.headerColor,
+                    size: 28,
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 20),
-            Container(
-              constraints: BoxConstraints(
-                maxHeight: products.length * 55.0,
+          ),
+          AnimatedCrossFade(
+            firstChild: const SizedBox.shrink(),
+            secondChild: Padding(
+              padding: const EdgeInsets.only(
+                left: 16.0,
+                right: 16.0,
+                bottom: 16.0,
               ),
-              child: ListView.builder(
-                physics: const NeverScrollableScrollPhysics(),
-                shrinkWrap: true,
-                itemCount: products.length,
-                itemBuilder: (context, index) {
-                  final product = products[index];
-                  final barValue = product.margin / 100;
+              child: Column(
+                children: [
+                  const Divider(height: 1),
+                  const SizedBox(height: 20),
+                  Container(
+                    constraints: BoxConstraints(
+                      maxHeight: widget.products.length * 55.0,
+                    ),
+                    child: ListView.builder(
+                      physics: const NeverScrollableScrollPhysics(),
+                      shrinkWrap: true,
+                      itemCount: widget.products.length,
+                      itemBuilder: (context, index) {
+                        final product = widget.products[index];
+                        final barValue = product.margin / 100;
 
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8.0),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        SizedBox(
-                          width: 80,
-                          child: Text(
-                            "${product.name}\nSKU: ${product.sku.length > 7 ? product.sku.substring(4) : product.sku}",
-                            style: const TextStyle(fontSize: 11, color: Colors.black54),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Stack(
-                            alignment: Alignment.centerLeft,
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8.0),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
-                              Container(
-                                height: 25,
-                                decoration: BoxDecoration(
-                                  color: AlmacenScreen.listBackgroundColor,
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                              ),
-                              Container(
-                                width: MediaQuery.of(context).size.width *
-                                    0.5 *
-                                    barValue.clamp(0.0, 1.0),
-                                height: 25,
-                                decoration: BoxDecoration(
-                                  color: AlmacenScreen.accentGreen.withOpacity(0.7),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                              ),
-                              Positioned(
-                                right: 10,
+                              SizedBox(
+                                width: 80,
                                 child: Text(
-                                  "${product.margin.toStringAsFixed(0)}%",
+                                  "${product.name}\nSKU: ${product.sku.length > 7 ? product.sku.substring(4) : product.sku}",
                                   style: const TextStyle(
-                                    color: Colors.black,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
+                                    fontSize: 11,
+                                    color: Colors.black54,
                                   ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Stack(
+                                  alignment: Alignment.centerLeft,
+                                  children: [
+                                    Container(
+                                      height: 25,
+                                      decoration: BoxDecoration(
+                                        color: AlmacenScreen.listBackgroundColor,
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                    ),
+                                    Container(
+                                      width: MediaQuery.of(context).size.width *
+                                          0.5 *
+                                          barValue.clamp(0.0, 1.0),
+                                      height: 25,
+                                      decoration: BoxDecoration(
+                                        color: AlmacenScreen.accentGreen
+                                            .withOpacity(0.7),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                    ),
+                                    Positioned(
+                                      right: 10,
+                                      child: Text(
+                                        "${product.margin.toStringAsFixed(0)}%",
+                                        style: const TextStyle(
+                                          color: Colors.black,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
                           ),
-                        ),
-                      ],
+                        );
+                      },
                     ),
-                  );
-                },
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
+            crossFadeState: _isExpanded
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            duration: const Duration(milliseconds: 300),
+          ),
+        ],
       ),
     );
   }
