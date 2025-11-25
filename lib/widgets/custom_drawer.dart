@@ -24,7 +24,6 @@ class CustomDrawer extends StatelessWidget {
             drawerItem(Icons.show_chart, "Finanzas", "/finanzas", context),
             drawerItem(Icons.person, "Proveedores", "/proveedores", context),
             drawerItem(Icons.people, "Personal", "/personal", context),
-            drawerItem(Icons.insert_drive_file, "Reportes", "/reportes", context),
             drawerItem(Icons.store, "Almacén", "/almacen", context),
             const Spacer(),
             drawerItem(Icons.logout, "Salir", "/", context),

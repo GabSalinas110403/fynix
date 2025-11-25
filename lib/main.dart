@@ -4,7 +4,6 @@ import 'package:fynix/screens/finanzas_screen.dart';
 import 'package:fynix/screens/home_screen.dart';
 import 'package:fynix/screens/personal_screen.dart';
 import 'package:fynix/screens/proveedores_screen.dart';
-import 'package:fynix/screens/reportes_screen.dart';
 
 import 'package:intl/date_symbol_data_local.dart';
 
@@ -30,7 +29,6 @@ class MainApp extends StatelessWidget {
         '/finanzas': (context) => const FinanzasScreen(),
         '/proveedores': (context) => const ProveedoresScreen(),
         '/personal': (context) => const PersonalScreen(),
-        '/reportes': (context) => const ReportesScreen(),
         '/almacen': (context) => const AlmacenScreen(),
       },
     );
