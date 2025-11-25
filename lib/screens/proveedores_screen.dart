@@ -21,6 +21,10 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
   List<Proveedor> proveedores = [];
   List<Proveedor> proveedoresFiltrados = [];
   TextEditingController searchController = TextEditingController();
+  
+  // Filtros avanzados
+  String? filtroCampoSeleccionado; // 'nombre', 'id', 'descripcion'
+  String? filtroMesSeleccionado;
 
   @override
   void initState() {
@@ -73,18 +77,191 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
   }
 
   void _filterProveedores() {
-    String query = searchController.text.toLowerCase();
+    String query = searchController.text.toLowerCase().trim();
     setState(() {
-      if (query.isEmpty) {
-        proveedoresFiltrados = List.from(proveedores);
-      } else {
-        proveedoresFiltrados = proveedores.where((proveedor) {
-          return proveedor.nombre.toLowerCase().contains(query) ||
-              proveedor.id.toLowerCase().contains(query) ||
-              proveedor.descripcion.toLowerCase().contains(query);
-        }).toList();
-      }
+      proveedoresFiltrados = proveedores.where((proveedor) {
+        // Filtro de búsqueda por texto según el campo seleccionado
+        bool matchesSearch = query.isEmpty;
+        
+        if (!matchesSearch && query.isNotEmpty) {
+          if (filtroCampoSeleccionado == null) {
+            // Si no hay campo seleccionado, buscar en todos
+            matchesSearch = proveedor.id.toLowerCase().contains(query) ||
+                proveedor.nombre.toLowerCase().contains(query) ||
+                proveedor.descripcion.toLowerCase().contains(query);
+          } else if (filtroCampoSeleccionado == 'nombre') {
+            matchesSearch = proveedor.nombre.toLowerCase().contains(query);
+          } else if (filtroCampoSeleccionado == 'id') {
+            matchesSearch = proveedor.id.toLowerCase().contains(query);
+          } else if (filtroCampoSeleccionado == 'descripcion') {
+            matchesSearch = proveedor.descripcion.toLowerCase().contains(query);
+          }
+        } else {
+          matchesSearch = true;
+        }
+
+        // Filtro por mes
+        bool matchesMes = true;
+        if (filtroMesSeleccionado != null) {
+          matchesMes = proveedor.fecha.toLowerCase().contains(filtroMesSeleccionado!.toLowerCase());
+        }
+
+        return matchesSearch && matchesMes;
+      }).toList();
     });
+  }
+
+  void _mostrarFiltros() {
+    final meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        String? tempFiltroCampo = filtroCampoSeleccionado;
+        String? tempFiltroMes = filtroMesSeleccionado;
+
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return SingleChildScrollView(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+                  top: 20,
+                  left: 20,
+                  right: 20,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Filtros',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            setModalState(() {
+                              tempFiltroCampo = null;
+                              tempFiltroMes = null;
+                            });
+                          },
+                          child: const Text('Limpiar'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      'Buscar por Campo',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 10),
+                    const Text(
+                      'Selecciona en qué campo buscar (si no seleccionas, buscará en todos)',
+                      style: TextStyle(fontSize: 12, color: Colors.black54),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 10,
+                      children: [
+                        FilterChip(
+                          label: const Text('Nombre'),
+                          selected: tempFiltroCampo == 'nombre',
+                          onSelected: (selected) {
+                            setModalState(() {
+                              tempFiltroCampo = selected ? 'nombre' : null;
+                            });
+                          },
+                          selectedColor: ProveedoresScreen.primaryColor.withOpacity(0.3),
+                        ),
+                        FilterChip(
+                          label: const Text('ID'),
+                          selected: tempFiltroCampo == 'id',
+                          onSelected: (selected) {
+                            setModalState(() {
+                              tempFiltroCampo = selected ? 'id' : null;
+                            });
+                          },
+                          selectedColor: ProveedoresScreen.primaryColor.withOpacity(0.3),
+                        ),
+                        FilterChip(
+                          label: const Text('Descripción'),
+                          selected: tempFiltroCampo == 'descripcion',
+                          onSelected: (selected) {
+                            setModalState(() {
+                              tempFiltroCampo = selected ? 'descripcion' : null;
+                            });
+                          },
+                          selectedColor: ProveedoresScreen.primaryColor.withOpacity(0.3),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      'Filtrar por Mes de Registro',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: meses.map((mes) {
+                        return FilterChip(
+                          label: Text(mes.toUpperCase()),
+                          selected: tempFiltroMes == mes,
+                          onSelected: (selected) {
+                            setModalState(() {
+                              tempFiltroMes = selected ? mes : null;
+                            });
+                          },
+                          selectedColor: Colors.blue[200],
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          setState(() {
+                            filtroCampoSeleccionado = tempFiltroCampo;
+                            filtroMesSeleccionado = tempFiltroMes;
+                          });
+                          _filterProveedores();
+                          Navigator.pop(context);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: ProveedoresScreen.primaryColor,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 15),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: const Text(
+                          'Aplicar Filtros',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   void _agregarProveedor() {
@@ -264,98 +441,107 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
     return '${date.day} ${months[date.month - 1]} ${date.year}';
   }
 
+  String _getNombreCampo(String campo) {
+    switch (campo) {
+      case 'nombre':
+        return 'Nombre';
+      case 'id':
+        return 'ID';
+      case 'descripcion':
+        return 'Descripción';
+      default:
+        return '';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       drawer: const CustomDrawer(),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              ProveedoresScreen.primaryColor,
-              ProveedoresScreen.accentColor,
-            ],
-            stops: [0.3, 0.3],
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              _buildCustomHeader(),
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Column(
-                    children: [
-                      _buildSearchBar(),
-                      const SizedBox(height: 20),
-                      _buildProveedoresList(),
-                      const SizedBox(height: 30),
-                    ],
-                  ),
-                ),
+      body: CustomScrollView(
+        physics: const ClampingScrollPhysics(),
+        slivers: [
+          SliverAppBar(
+            pinned: true,
+            expandedHeight: 220.0,
+            backgroundColor: ProveedoresScreen.primaryColor,
+            leading: Builder(
+              builder: (context) => IconButton(
+                icon: const Icon(Icons.menu, color: Colors.white),
+                onPressed: () => Scaffold.of(context).openDrawer(),
               ),
+            ),
+            actions: [
+              NotificationIcon(allTasks: allTasks),
+              const SizedBox(width: 8),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCustomHeader() {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 50),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
-            child: Row(
-              children: [
-                Builder(
-                  builder: (context) => IconButton(
-                    icon: const Icon(Icons.menu, color: Colors.white, size: 30),
-                    onPressed: () => Scaffold.of(context).openDrawer(),
-                  ),
-                ),
-                const Spacer(),
-                NotificationIcon(allTasks: allTasks),
-                const SizedBox(width: 8),
-              ],
-            ),
-          ),
-          const Text(
-            'Proveedores',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 26,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 5),
-          const Text(
-            'Gestión de Proveedores',
-            style: TextStyle(color: Colors.white70, fontSize: 16),
-          ),
-          const SizedBox(height: 20),
-          ElevatedButton.icon(
-            onPressed: _agregarProveedor,
-            icon: const Icon(Icons.add, color: ProveedoresScreen.primaryColor),
-            label: const Text(
-              '+ Proveedores',
-              style: TextStyle(
+            flexibleSpace: FlexibleSpaceBar(
+              centerTitle: true,
+              title: Container(),
+              background: Container(
                 color: ProveedoresScreen.primaryColor,
-                fontWeight: FontWeight.bold,
+                padding: const EdgeInsets.only(top: 80, bottom: 20, left: 16, right: 16),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    const Text(
+                      'Proveedores',
+                      style: TextStyle(
+                        fontSize: 30,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const Text(
+                      'Gestión de Proveedores',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.white70,
+                      ),
+                    ),
+                    const SizedBox(height: 15),
+                    ElevatedButton.icon(
+                      onPressed: _agregarProveedor,
+                      icon: const Icon(Icons.add, color: ProveedoresScreen.primaryColor),
+                      label: const Text(
+                        '+ Proveedores',
+                        style: TextStyle(
+                          color: ProveedoresScreen.primaryColor,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                        elevation: 5,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
+          ),
+          SliverToBoxAdapter(
+            child: Container(
+              color: ProveedoresScreen.accentColor,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                    child: _buildSearchBar(),
+                  ),
+                  const SizedBox(height: 20),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                    child: _buildProveedoresList(),
+                  ),
+                  const SizedBox(height: 50),
+                ],
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              elevation: 5,
             ),
           ),
         ],
@@ -365,7 +551,7 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
 
   Widget _buildSearchBar() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 0),
       child: Container(
         transform: Matrix4.translationValues(0.0, 6.0, 0.0),
         child: Row(
@@ -386,11 +572,13 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
                 ),
                 child: TextField(
                   controller: searchController,
-                  decoration: const InputDecoration(
-                    hintText: "Buscar . . .",
-                    hintStyle: TextStyle(color: Colors.black54),
+                  decoration: InputDecoration(
+                    hintText: filtroCampoSeleccionado == null 
+                      ? "Buscar . . ." 
+                      : "Buscar en ${_getNombreCampo(filtroCampoSeleccionado!)}...",
+                    hintStyle: const TextStyle(color: Colors.black54),
                     border: InputBorder.none,
-                    icon: Icon(Icons.search, color: ProveedoresScreen.primaryColor),
+                    icon: const Icon(Icons.search, color: ProveedoresScreen.primaryColor),
                   ),
                 ),
               ),
@@ -398,7 +586,9 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
             const SizedBox(width: 10),
             Container(
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.9),
+                color: filtroCampoSeleccionado != null || filtroMesSeleccionado != null
+                  ? ProveedoresScreen.primaryColor
+                  : Colors.white.withOpacity(0.9),
                 borderRadius: BorderRadius.circular(10),
                 boxShadow: [
                   BoxShadow(
@@ -409,12 +599,14 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
                 ],
               ),
               child: IconButton(
-                icon: const Icon(Icons.filter_list, color: ProveedoresScreen.primaryColor, size: 28),
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Filtros próximamente')),
-                  );
-                },
+                icon: Icon(
+                  Icons.filter_list, 
+                  color: filtroCampoSeleccionado != null || filtroMesSeleccionado != null
+                    ? Colors.white
+                    : ProveedoresScreen.primaryColor, 
+                  size: 28
+                ),
+                onPressed: _mostrarFiltros,
               ),
             ),
           ],
@@ -425,7 +617,7 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
 
   Widget _buildProveedoresList() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 0),
       child: proveedoresFiltrados.isEmpty
           ? Center(
               child: Padding(
