@@ -624,7 +624,7 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
                       onPressed: _agregarProveedor,
                       icon: const Icon(Icons.add, color: ProveedoresScreen.primaryColor),
                       label: const Text(
-                        '+ Proveedores',
+                        'Proveedores',
                         style: TextStyle(
                           color: ProveedoresScreen.primaryColor,
                           fontWeight: FontWeight.bold,
@@ -678,7 +678,7 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 0),
       child: Container(
-        transform: Matrix4.translationValues(0.0, 6.0, 0.0),
+        transform: Matrix4.translationValues(0.0, 10.0, 0.0),
         child: Row(
           children: [
             Expanded(
@@ -742,7 +742,7 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
 
   Widget _buildExportButton() {
     return Container(
-      transform: Matrix4.translationValues(0.0, 6.0, 0.0),
+      transform: Matrix4.translationValues(0.0, 10.0, 0.0),
       width: double.infinity,
       child: ElevatedButton.icon(
         onPressed: _exportarAPDF,

@@ -4,6 +4,9 @@ import 'dart:convert';
 import 'package:fynix/widgets/custom_drawer.dart';
 import '../widgets/notification_icon.dart';
 import 'home_screen.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 
 class PersonalScreen extends StatefulWidget {
   const PersonalScreen({super.key});
@@ -21,6 +24,10 @@ class _PersonalScreenState extends State<PersonalScreen> {
   List<Empleado> empleados = [];
   List<Empleado> empleadosFiltrados = [];
   TextEditingController searchController = TextEditingController();
+
+  // Filtros avanzados
+  String? filtroCampoSeleccionado; // 'nombre', 'id', 'puesto'
+  bool? filtroActivoSeleccionado; // true (Activos), false (Inactivos), null (Todos)
 
   @override
   void initState() {
@@ -82,30 +89,231 @@ class _PersonalScreenState extends State<PersonalScreen> {
         vacacionesPendientes: 2,
         activo: true,
       ),
+      Empleado(
+        id: 'EMP-005',
+        nombre: 'Pedro Gómez Ruiz',
+        puesto: 'Ventas',
+        sueldo: 15000.00,
+        vacacionesPendientes: 1,
+        activo: false,
+      ),
     ];
     empleadosFiltrados = List.from(empleados);
   }
 
   void _filterEmpleados() {
-    String query = searchController.text.toLowerCase();
+    String query = searchController.text.toLowerCase().trim();
     setState(() {
-      if (query.isEmpty) {
-        empleadosFiltrados = List.from(empleados);
-      } else {
-        empleadosFiltrados = empleados.where((empleado) {
-          return empleado.nombre.toLowerCase().contains(query) ||
-              empleado.id.toLowerCase().contains(query) ||
-              empleado.puesto.toLowerCase().contains(query);
-        }).toList();
-      }
+      empleadosFiltrados = empleados.where((empleado) {
+        // 1. Filtro de búsqueda por texto y campo seleccionado
+        bool matchesSearch = query.isEmpty;
+
+        if (!matchesSearch && query.isNotEmpty) {
+          if (filtroCampoSeleccionado == 'nombre') {
+            matchesSearch = empleado.nombre.toLowerCase().contains(query);
+          } else if (filtroCampoSeleccionado == 'id') {
+            matchesSearch = empleado.id.toLowerCase().contains(query);
+          } else if (filtroCampoSeleccionado == 'puesto') {
+            matchesSearch = empleado.puesto.toLowerCase().contains(query);
+          } else {
+            // Si no hay campo seleccionado, buscar en todos
+            matchesSearch = empleado.nombre.toLowerCase().contains(query) ||
+                empleado.id.toLowerCase().contains(query) ||
+                empleado.puesto.toLowerCase().contains(query);
+          }
+        } else if (query.isEmpty) {
+          matchesSearch = true;
+        }
+
+        // 2. Filtro por estado (Activo/Inactivo)
+        bool matchesActivo = filtroActivoSeleccionado == null ||
+            empleado.activo == filtroActivoSeleccionado;
+
+        return matchesSearch && matchesActivo;
+      }).toList();
     });
   }
 
   int get empleadosActivos => empleados.where((e) => e.activo).length;
-  int get vacacionesPendientes => empleados.fold(0, (sum, e) => sum + e.vacacionesPendientes);
-  int get proximosEventos => 1; // Puede ser calculado según eventos reales
+  int get vacacionesPendientes => empleados.where((e) => e.activo).fold(0, (sum, e) => sum + e.vacacionesPendientes);
+  int get proximosEventos => 1;
+
+  String _getNombreCampo(String campo) {
+    switch (campo) {
+      case 'nombre':
+        return 'Nombre';
+      case 'id':
+        return 'ID';
+      case 'puesto':
+        return 'Puesto';
+      default:
+        return '';
+    }
+  }
+
+  void _mostrarFiltros() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        String? tempFiltroCampo = filtroCampoSeleccionado;
+        bool? tempFiltroActivo = filtroActivoSeleccionado;
+
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return SingleChildScrollView(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+                  top: 20,
+                  left: 20,
+                  right: 20,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Filtros de Personal',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: PersonalScreen.textColor,
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            setModalState(() {
+                              tempFiltroCampo = null;
+                              tempFiltroActivo = null;
+                            });
+                          },
+                          child: const Text('Limpiar'),
+                        ),
+                      ],
+                    ),
+                    const Divider(),
+                    const Text(
+                      'Buscar por Campo',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 10),
+                    const Text(
+                      'Selecciona en qué campo buscar por texto (si no seleccionas, buscará en todos)',
+                      style: TextStyle(fontSize: 12, color: Colors.black54),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 10,
+                      children: [
+                        FilterChip(
+                          label: const Text('Nombre'),
+                          selected: tempFiltroCampo == 'nombre',
+                          onSelected: (selected) {
+                            setModalState(() {
+                              tempFiltroCampo = selected ? 'nombre' : null;
+                            });
+                          },
+                          selectedColor: PersonalScreen.primaryColor.withOpacity(0.3),
+                        ),
+                        FilterChip(
+                          label: const Text('ID'),
+                          selected: tempFiltroCampo == 'id',
+                          onSelected: (selected) {
+                            setModalState(() {
+                              tempFiltroCampo = selected ? 'id' : null;
+                            });
+                          },
+                          selectedColor: PersonalScreen.primaryColor.withOpacity(0.3),
+                        ),
+                        FilterChip(
+                          label: const Text('Puesto'),
+                          selected: tempFiltroCampo == 'puesto',
+                          onSelected: (selected) {
+                            setModalState(() {
+                              tempFiltroCampo = selected ? 'puesto' : null;
+                            });
+                          },
+                          selectedColor: PersonalScreen.primaryColor.withOpacity(0.3),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      'Filtrar por Estado',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 10,
+                      children: [
+                        FilterChip(
+                          label: const Text('Activos'),
+                          selected: tempFiltroActivo == true,
+                          onSelected: (selected) {
+                            setModalState(() {
+                              tempFiltroActivo = selected ? true : null;
+                            });
+                          },
+                          selectedColor: Colors.green[200],
+                        ),
+                        FilterChip(
+                          label: const Text('Inactivos'),
+                          selected: tempFiltroActivo == false,
+                          onSelected: (selected) {
+                            setModalState(() {
+                              tempFiltroActivo = selected ? false : null;
+                            });
+                          },
+                          selectedColor: Colors.orange[200],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          setState(() {
+                            filtroCampoSeleccionado = tempFiltroCampo;
+                            filtroActivoSeleccionado = tempFiltroActivo;
+                          });
+                          _filterEmpleados();
+                          Navigator.pop(context);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: PersonalScreen.primaryColor,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 15),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: const Text(
+                          'Aplicar Filtros',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
 
   void _agregarEmpleado() {
+    // ... (Código de _agregarEmpleado)
     final nombreController = TextEditingController();
     final puestoController = TextEditingController();
     final sueldoController = TextEditingController();
@@ -189,6 +397,7 @@ class _PersonalScreenState extends State<PersonalScreen> {
   }
 
   void _editarEmpleado(Empleado empleado) {
+    // ... (Código de _editarEmpleado)
     final nombreController = TextEditingController(text: empleado.nombre);
     final puestoController = TextEditingController(text: empleado.puesto);
     final sueldoController = TextEditingController(text: empleado.sueldo.toString());
@@ -283,6 +492,7 @@ class _PersonalScreenState extends State<PersonalScreen> {
   }
 
   void _toggleEstadoEmpleado(Empleado empleado) {
+    // ... (Código de _toggleEstadoEmpleado)
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -334,6 +544,96 @@ class _PersonalScreenState extends State<PersonalScreen> {
     );
   }
 
+  Future<void> _exportarAPDF() async {
+    // ... (Código de _exportarAPDF)
+    if (empleadosFiltrados.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No hay resultados para exportar')),
+      );
+      return;
+    }
+
+    final pdf = pw.Document();
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(32),
+        build: (pw.Context context) {
+          return [
+            // Encabezado
+            pw.Header(
+              level: 0,
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    'Reporte de Personal',
+                    style: pw.TextStyle(
+                      fontSize: 24,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColor.fromHex('#06373E'),
+                    ),
+                  ),
+                  pw.SizedBox(height: 8),
+                  pw.Text(
+                    'Total de resultados: ${empleadosFiltrados.length}',
+                    style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
+                  ),
+                  if (filtroActivoSeleccionado != null)
+                    pw.Text(
+                      'Filtro Estado: ${filtroActivoSeleccionado == true ? 'Activos' : 'Inactivos'}',
+                      style: const pw.TextStyle(fontSize: 11, color: PdfColors.grey700),
+                    ),
+                  pw.Divider(thickness: 1.5, color: PdfColor.fromHex('#84B9BF')),
+                ],
+              ),
+            ),
+            
+            // Tabla de Empleados
+            _buildPdfTable(),
+          ];
+        },
+      ),
+    );
+
+    final bytes = await pdf.save();
+
+    await Printing.sharePdf(
+      bytes: bytes,
+      filename: 'Reporte_Personal_${DateTime.now().millisecondsSinceEpoch}.pdf',
+    );
+    
+    ScaffoldMessenger.of(this.context).showSnackBar(
+      const SnackBar(content: Text('PDF generado y listo para compartir')),
+    );
+  }
+
+  pw.Widget _buildPdfTable() {
+    // ... (Código de _buildPdfTable)
+    const tableHeaders = ['ID', 'Nombre', 'Puesto', 'Sueldo (MXN)', 'Vacaciones', 'Estado'];
+
+    return pw.Table.fromTextArray(
+      headers: tableHeaders,
+      data: empleadosFiltrados.map((empleado) {
+        return [
+          empleado.id,
+          empleado.nombre,
+          empleado.puesto,
+          '\$${empleado.sueldo.toStringAsFixed(2)}',
+          empleado.vacacionesPendientes.toString(),
+          empleado.activo ? 'Activo' : 'Inactivo',
+        ];
+      }).toList(),
+      border: pw.TableBorder.all(color: PdfColor.fromHex('#84B9BF')),
+      headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white),
+      headerDecoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFF84B9BF)),
+      cellAlignment: pw.Alignment.centerLeft,
+      cellPadding: const pw.EdgeInsets.all(6),
+      oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey100),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -343,118 +643,122 @@ class _PersonalScreenState extends State<PersonalScreen> {
         backgroundColor: PersonalScreen.primaryColor,
         child: const Icon(Icons.person_add, color: Colors.white),
       ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              PersonalScreen.primaryColor,
-              PersonalScreen.accentColor,
+      body: CustomScrollView(
+        physics: const ClampingScrollPhysics(),
+        slivers: [
+          SliverAppBar(
+            pinned: true,
+            expandedHeight: 250.0, // Altura adecuada para incluir estadísticas
+            backgroundColor: PersonalScreen.primaryColor,
+            leading: Builder(
+              builder: (context) => IconButton(
+                icon: const Icon(Icons.menu, color: Colors.white, size: 30),
+                onPressed: () => Scaffold.of(context).openDrawer(),
+              ),
+            ),
+            actions: [
+              NotificationIcon(allTasks: allTasks),
+              const SizedBox(width: 8),
             ],
-            stops: [0.3, 0.3],
-          ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              _buildCustomHeader(),
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Column(
-                    children: [
-                      _buildSearchBar(),
-                      const SizedBox(height: 20),
-                      _buildEmpleadosList(),
-                      const SizedBox(height: 80),
-                    ],
-                  ),
+            flexibleSpace: FlexibleSpaceBar(
+              centerTitle: true,
+              title: Container(),
+              background: Container(
+                color: PersonalScreen.primaryColor,
+                // Reducir el padding inferior para dar más espacio
+                padding: const EdgeInsets.only(top: 80, bottom: 8, left: 16, right: 16),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    const Text(
+                      'Personal',
+                      style: TextStyle(
+                        fontSize: 30,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const Text(
+                      'Gestión de Recursos Humanos',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.white70,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    // Stats en la AppBar expandida
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 0.0),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: _buildStatContainer(
+                              'Empleados activos:',
+                              empleadosActivos.toString(),
+                              Colors.white,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _buildStatContainer(
+                              'Vacaciones pendientes:',
+                              vacacionesPendientes.toString(),
+                              Colors.white,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _buildStatContainer(
+                              'Próximos eventos:',
+                              proximosEventos.toString(),
+                              Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCustomHeader() {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 25),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
-            child: Row(
-              children: [
-                Builder(
-                  builder: (context) => IconButton(
-                    icon: const Icon(Icons.menu, color: Colors.white, size: 30),
-                    onPressed: () => Scaffold.of(context).openDrawer(),
-                  ),
-                ),
-                const Spacer(),
-                NotificationIcon(allTasks: allTasks),
-                const SizedBox(width: 8),
-              ],
             ),
           ),
-          const Text(
-            'Personal',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 26,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 5),
-          const Text(
-            'Gestión de Recursos Humanos',
-            style: TextStyle(color: Colors.white70, fontSize: 16),
-          ),
-          const SizedBox(height: 20),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: _buildStatContainer(
-                    'Empleados activos:',
-                    empleadosActivos.toString(),
-                    Colors.white,
+          SliverToBoxAdapter(
+            child: Container(
+              color: PersonalScreen.accentColor,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                    child: _buildSearchBar(),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _buildStatContainer(
-                    'Vacaciones pendientes:',
-                    vacacionesPendientes.toString(),
-                    Colors.white,
+                  const SizedBox(height: 10),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                    child: _buildExportButton(),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _buildStatContainer(
-                    'Próximos eventos:',
-                    proximosEventos.toString(),
-                    Colors.white,
-                  ),
-                ),
-              ],
+                  // Eliminamos el SizedBox(height: 20) después del botón de exportar
+                  // para reducir el espacio si es necesario, pero lo mantenemos al final.
+                  const SizedBox(height: 20), 
+                  _buildEmpleadosList(),
+                  const SizedBox(height: 80),
+                ],
+              ),
             ),
           ),
         ],
       ),
     );
   }
-
+  
+  // Widget de estadísticas reutilizado con ajustes para evitar overflow
   Widget _buildStatContainer(String label, String value, Color bgColor) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+      // Padding vertical ligeramente reducido
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6), 
       decoration: BoxDecoration(
-        color: bgColor,
+        color: bgColor.withOpacity(0.9),
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
@@ -472,7 +776,7 @@ class _PersonalScreenState extends State<PersonalScreen> {
             textAlign: TextAlign.center,
             style: const TextStyle(
               color: PersonalScreen.textColor,
-              fontSize: 11,
+              fontSize: 10,
               fontWeight: FontWeight.w400,
             ),
           ),
@@ -481,7 +785,7 @@ class _PersonalScreenState extends State<PersonalScreen> {
             value,
             style: const TextStyle(
               color: PersonalScreen.textColor,
-              fontSize: 20,
+              fontSize: 18, 
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -490,43 +794,19 @@ class _PersonalScreenState extends State<PersonalScreen> {
     );
   }
 
+  // Se mueve el ajuste de la posición a la barra de búsqueda y exportación
   Widget _buildSearchBar() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Container(
-        transform: Matrix4.translationValues(0.0, 6.0, 0.0),
-        child: Row(
-          children: [
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.9),
-                  borderRadius: BorderRadius.circular(15),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 5,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: TextField(
-                  controller: searchController,
-                  decoration: const InputDecoration(
-                    hintText: "Buscar . . .",
-                    hintStyle: TextStyle(color: Colors.black54),
-                    border: InputBorder.none,
-                    icon: Icon(Icons.search, color: PersonalScreen.primaryColor),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Container(
+    return Container(
+      // Ajuste de traslación para superponer en el área del AppBar
+      transform: Matrix4.translationValues(0.0, 10.0, 0.0), // Ajustado de -24.0 a -32.0 para subirlo más
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.9),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(15),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.05),
@@ -535,16 +815,73 @@ class _PersonalScreenState extends State<PersonalScreen> {
                   ),
                 ],
               ),
-              child: IconButton(
-                icon: const Icon(Icons.filter_list, color: PersonalScreen.primaryColor, size: 28),
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Filtros próximamente')),
-                  );
-                },
+              child: TextField(
+                controller: searchController,
+                decoration: InputDecoration(
+                  hintText: filtroCampoSeleccionado == null 
+                    ? "Buscar por nombre, ID o puesto..." 
+                    : "Buscar en ${_getNombreCampo(filtroCampoSeleccionado!)}...",
+                  hintStyle: const TextStyle(color: Colors.black54),
+                  border: InputBorder.none,
+                  icon: const Icon(Icons.search, color: PersonalScreen.primaryColor),
+                ),
               ),
             ),
-          ],
+          ),
+          const SizedBox(width: 10),
+          Container(
+            decoration: BoxDecoration(
+              color: filtroCampoSeleccionado != null || filtroActivoSeleccionado != null
+                  ? PersonalScreen.primaryColor
+                  : Colors.white.withOpacity(0.9),
+              borderRadius: BorderRadius.circular(10),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 5,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: IconButton(
+              icon: Icon(
+                Icons.filter_list,
+                color: filtroCampoSeleccionado != null || filtroActivoSeleccionado != null
+                    ? Colors.white
+                    : PersonalScreen.primaryColor,
+                size: 28,
+              ),
+              onPressed: _mostrarFiltros,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExportButton() {
+    return Container(
+      // Ajuste de traslación para superponer en el área del AppBar
+      transform: Matrix4.translationValues(0.0, 10.0, 0.0), 
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: _exportarAPDF,
+        icon: const Icon(Icons.picture_as_pdf, size: 20),
+        label: const Text(
+          'Exportar resultados a PDF',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: PersonalScreen.primaryColor,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          elevation: 3,
         ),
       ),
     );
@@ -585,13 +922,15 @@ class _PersonalScreenState extends State<PersonalScreen> {
   }
 
   Widget _buildEmployeeCard(Empleado empleado) {
+    // ... (El resto de _buildEmployeeCard se mantiene igual)
     return Padding(
       padding: const EdgeInsets.only(bottom: 15.0),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: empleado.activo ? Colors.white : Colors.grey[300],
+          color: empleado.activo ? Colors.white : PersonalScreen.accentColor,
           borderRadius: BorderRadius.circular(16),
+          border: empleado.activo ? null : Border.all(color: Colors.orange.shade300, width: 1),
           boxShadow: [
             BoxShadow(
               color: PersonalScreen.primaryColor.withOpacity(0.1),
