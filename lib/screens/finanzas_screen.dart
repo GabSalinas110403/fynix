@@ -211,53 +211,57 @@ class _FinanzasScreenState extends State<FinanzasScreen> {
   // ------------------------------------------------------
   // GENERAR Y DESCARGAR PDF
   // ------------------------------------------------------
-  Future<void> generarPDF() async {
-    final pdf = pw.Document();
+Future<void> generarPDF() async {
+  final pdf = pw.Document();
 
-    pdf.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        build: (context) => [
-          pw.Center(
-            child: pw.Text(
-              "Reporte de Finanzas",
-              style: pw.TextStyle(
-                fontSize: 28,
-                fontWeight: pw.FontWeight.bold,
-                color: PdfColor.fromHex('#06373E'),
-              ),
+  pdf.addPage(
+    pw.MultiPage(
+      pageFormat: PdfPageFormat.a4,
+      build: (context) => [
+        pw.Center(
+          child: pw.Text(
+            "Reporte de Finanzas",
+            style: pw.TextStyle(
+              fontSize: 28,
+              fontWeight: pw.FontWeight.bold,
+              color: PdfColor.fromHex('#06373E'),
             ),
           ),
-          pw.SizedBox(height: 20),
-          pw.Text("Resumen General",
-              style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
-          pw.Divider(thickness: 1, color: PdfColor.fromHex('#84B9BF')),
-          _buildPdfRow("Ingresos Totales:", totalIngresos, PdfColors.green),
-          _buildPdfRow("Gastos Totales:", totalGastos, PdfColors.red),
-          _buildPdfRow("Balance Final:", totalRestante, PdfColors.blue),
-          pw.SizedBox(height: 20),
-          pw.Text("Detalle de Movimientos",
-              style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
-          pw.Divider(thickness: 1, color: PdfColor.fromHex('#84B9BF')),
-          pw.SizedBox(height: 10),
-          _buildPdfTable(),
-        ],
-      ),
+        ),
+        pw.SizedBox(height: 20),
+        pw.Text("Resumen General",
+            style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
+        pw.Divider(thickness: 1, color: PdfColor.fromHex('#84B9BF')),
+        _buildPdfRow("Ingresos Totales:", totalIngresos, PdfColors.green),
+        _buildPdfRow("Gastos Totales:", totalGastos, PdfColors.red),
+        _buildPdfRow("Balance Final:", totalRestante, PdfColors.blue),
+        pw.SizedBox(height: 20),
+        pw.Text("Detalle de Movimientos",
+            style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
+        pw.Divider(thickness: 1, color: PdfColor.fromHex('#84B9BF')),
+        pw.SizedBox(height: 10),
+        _buildPdfTable(),
+      ],
+    ),
+  );
+
+  final bytes = await pdf.save();
+
+
+  // ------------------------------------------------------------------
+  // COMPATIBLE CON ANDROID: Compartir o Guardar PDF sin errores
+  // ------------------------------------------------------------------
+  await Printing.sharePdf(
+    bytes: bytes,
+    filename: 'Reporte_Finanzas_${DateTime.now().millisecondsSinceEpoch}.pdf',
+  );
+
+  if (mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('PDF generado y listo para compartir')),
     );
-
-    final bytes = await pdf.save();
-
-    await Printing.sharePdf(
-      bytes: bytes,
-      filename: 'Reporte_Finanzas_${DateTime.now().millisecondsSinceEpoch}.pdf',
-    );
-
-    if (mounted) {
-      ScaffoldMessenger.of(this.context).showSnackBar(
-        const SnackBar(content: Text('PDF generado y listo para compartir')),
-      );
-    }
   }
+}
 
   pw.Widget _buildPdfTable() {
     final tableHeaders = ['Tipo', 'Descripción', 'Cantidad (MXN)', 'Fecha'];
@@ -314,13 +318,6 @@ class _FinanzasScreenState extends State<FinanzasScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       drawer: const CustomDrawer(),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: generarPDF,
-        backgroundColor: FinanzasScreen.primaryColor,
-        foregroundColor: Colors.white,
-        label: const Text("Descargar Reporte PDF"),
-        icon: const Icon(Icons.picture_as_pdf),
-      ),
       body: CustomScrollView(
         physics: const ClampingScrollPhysics(),
         slivers: [
@@ -332,7 +329,36 @@ class _FinanzasScreenState extends State<FinanzasScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   _buildResumen(),
+                  const SizedBox(height: 10),
+
+                  // -------------------------------
+                  // BOTÓN DE EXPORTAR PDF (OPCIÓN B)
+                  // -------------------------------
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20,vertical: 8),
+                    child: ElevatedButton.icon(
+                      onPressed: generarPDF,
+                      icon: const Icon(Icons.picture_as_pdf, color: Colors.white),
+                      label: const Text(
+                        "Exportar PDF",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: FinanzasScreen.primaryColor,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        elevation: 4,
+                      ),
+                    ),
+                  ),
+
                   const SizedBox(height: 20),
+
                   _buildListaRegistros(),
                   const SizedBox(height: 20),
                   _buildGrafica(),
