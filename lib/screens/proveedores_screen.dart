@@ -7,6 +7,7 @@ import 'home_screen.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:fynix/helpers/pdf_export_helper.dart';
 
 class ProveedoresScreen extends StatefulWidget {
   const ProveedoresScreen({super.key});
@@ -457,122 +458,85 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
     }
   }
 
-  Future<void> _exportarAPDF() async {
-    if (proveedoresFiltrados.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No hay resultados para exportar')),
-      );
-      return;
+Future<void> _exportarAPDF() async {
+  Map<String, dynamic>? filters;
+  
+  if (filtroCampoSeleccionado != null || filtroMesSeleccionado != null) {
+    filters = {};
+    if (filtroCampoSeleccionado != null) {
+      filters['Campo'] = _getNombreCampo(filtroCampoSeleccionado!);
     }
+    if (filtroMesSeleccionado != null) {
+      filters['Mes'] = filtroMesSeleccionado!.toUpperCase();
+    }
+  }
 
-    final pdf = pw.Document();
-
-    pdf.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(32),
-        build: (pw.Context context) {
-          return [
-            // Encabezado
-            pw.Header(
-              level: 0,
-              child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
+  await PDFExportHelper.exportToPDF<Proveedor>(
+    context: context,
+    data: proveedoresFiltrados,
+    title: 'Reporte de Proveedores',
+    fileName: 'Proveedores',
+    filters: filters,
+    buildContent: (proveedores) {
+      return proveedores.map((proveedor) {
+        return pw.Container(
+          margin: const pw.EdgeInsets.only(bottom: 16),
+          padding: const pw.EdgeInsets.all(12),
+          decoration: pw.BoxDecoration(
+            border: pw.Border.all(
+              color: PdfColor.fromHex('#84B9BF'),
+              width: 1,
+            ),
+            borderRadius: pw.BorderRadius.circular(8),
+          ),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
-                  pw.Text(
-                    'Reporte de Proveedores',
-                    style: pw.TextStyle(
-                      fontSize: 24,
-                      fontWeight: pw.FontWeight.bold,
-                      color: PdfColor.fromHex('#84B9BF'),
+                  pw.Expanded(
+                    child: pw.Text(
+                      proveedor.nombre,
+                      style: pw.TextStyle(
+                        fontSize: 14,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColor.fromHex('#06373E'),
+                      ),
                     ),
                   ),
-                  pw.SizedBox(height: 8),
                   pw.Text(
-                    'Fecha de generación: ${_formatDate(DateTime.now())}',
-                    style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey700),
-                  ),
-                  if (filtroCampoSeleccionado != null || filtroMesSeleccionado != null) ...[
-                    pw.SizedBox(height: 8),
-                    pw.Text(
-                      'Filtros aplicados:',
-                      style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
+                    proveedor.fecha,
+                    style: const pw.TextStyle(
+                      fontSize: 10,
+                      color: PdfColors.grey600,
                     ),
-                    if (filtroCampoSeleccionado != null)
-                      pw.Text(
-                        '• Campo: ${_getNombreCampo(filtroCampoSeleccionado!)}',
-                        style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700),
-                      ),
-                    if (filtroMesSeleccionado != null)
-                      pw.Text(
-                        '• Mes: ${filtroMesSeleccionado!.toUpperCase()}',
-                        style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700),
-                      ),
-                  ],
-                  pw.SizedBox(height: 4),
-                  pw.Text(
-                    'Total de resultados: ${proveedoresFiltrados.length}',
-                    style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
                   ),
-                  pw.Divider(thickness: 2, color: PdfColor.fromHex('#84B9BF')),
                 ],
               ),
-            ),
-            pw.SizedBox(height: 20),
-            // Lista de proveedores
-            ...proveedoresFiltrados.map((proveedor) {
-              return pw.Container(
-                margin: const pw.EdgeInsets.only(bottom: 16),
-                padding: const pw.EdgeInsets.all(12),
-                decoration: pw.BoxDecoration(
-                  border: pw.Border.all(color: PdfColor.fromHex('#84B9BF'), width: 1),
-                  borderRadius: pw.BorderRadius.circular(8),
+              pw.SizedBox(height: 4),
+              pw.Text(
+                'ID: ${proveedor.id}',
+                style: const pw.TextStyle(
+                  fontSize: 12,
+                  color: PdfColors.grey700,
                 ),
-                child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Row(
-                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                      children: [
-                        pw.Text(
-                          proveedor.nombre,
-                          style: pw.TextStyle(
-                            fontSize: 14,
-                            fontWeight: pw.FontWeight.bold,
-                            color: PdfColor.fromHex('#06373E'),
-                          ),
-                        ),
-                        pw.Text(
-                          proveedor.fecha,
-                          style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey600),
-                        ),
-                      ],
-                    ),
-                    pw.SizedBox(height: 4),
-                    pw.Text(
-                      'ID: ${proveedor.id}',
-                      style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey700),
-                    ),
-                    pw.SizedBox(height: 8),
-                    pw.Text(
-                      proveedor.descripcion,
-                      style: const pw.TextStyle(fontSize: 11, color: PdfColors.grey800),
-                    ),
-                  ],
+              ),
+              pw.SizedBox(height: 8),
+              pw.Text(
+                proveedor.descripcion,
+                style: const pw.TextStyle(
+                  fontSize: 11,
+                  color: PdfColors.grey800,
                 ),
-              );
-            }).toList(),
-          ];
-        },
-      ),
-    );
-
-    // Mostrar el diálogo de impresión/guardado
-    await Printing.layoutPdf(
-      onLayout: (PdfPageFormat format) async => pdf.save(),
-      name: 'Proveedores_${DateTime.now().millisecondsSinceEpoch}.pdf',
-    );
-  }
+              ),
+            ],
+          ),
+        );
+      }).toList();
+    },
+  );
+}
 
   @override
   Widget build(BuildContext context) {

@@ -11,6 +11,9 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:permission_handler/permission_handler.dart';
 
+import 'package:fynix/helpers/pdf_export_helper.dart'; 
+
+
 class PersonalScreen extends StatefulWidget {
   const PersonalScreen({super.key});
 
@@ -494,7 +497,6 @@ class _PersonalScreenState extends State<PersonalScreen> {
   }
 
   void _toggleEstadoEmpleado(Empleado empleado) {
-    // ... (Código de _toggleEstadoEmpleado)
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -546,143 +548,49 @@ class _PersonalScreenState extends State<PersonalScreen> {
     );
   }
 
+
 Future<void> _exportarAPDF() async {
-  if (empleadosFiltrados.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('No hay resultados para exportar')),
-    );
-    return;
+  Map<String, dynamic>? filters;
+  
+  if (filtroCampoSeleccionado != null || filtroActivoSeleccionado != null) {
+    filters = {};
+    if (filtroCampoSeleccionado != null) {
+      filters['Campo'] = _getNombreCampo(filtroCampoSeleccionado!);
+    }
+    if (filtroActivoSeleccionado != null) {
+      filters['Estado'] = filtroActivoSeleccionado == true ? 'Activos' : 'Inactivos';
+    }
   }
 
-  try {
-    // Solicitar permisos de almacenamiento
-    if (Platform.isAndroid || Platform.isIOS) {
-      var status = await Permission.storage.status;
-      if (!status.isGranted) {
-        status = await Permission.storage.request();
-        if (!status.isGranted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Se requieren permisos de almacenamiento')),
-          );
-          return;
-        }
-      }
-    }
-
-    // Crear el PDF
-    final pdf = pw.Document();
-
-    pdf.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(32),
-        build: (pw.Context context) {
-          return [
-            // Encabezado
-            pw.Header(
-              level: 0,
-              child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Text(
-                    'Reporte de Personal',
-                    style: pw.TextStyle(
-                      fontSize: 24,
-                      fontWeight: pw.FontWeight.bold,
-                      color: PdfColor.fromHex('#06373E'),
-                    ),
-                  ),
-                  pw.SizedBox(height: 8),
-                  pw.Text(
-                    'Total de resultados: ${empleadosFiltrados.length}',
-                    style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
-                  ),
-                  if (filtroActivoSeleccionado != null)
-                    pw.Text(
-                      'Filtro Estado: ${filtroActivoSeleccionado == true ? 'Activos' : 'Inactivos'}',
-                      style: const pw.TextStyle(fontSize: 11, color: PdfColors.grey700),
-                    ),
-                  pw.Divider(thickness: 1.5, color: PdfColor.fromHex('#84B9BF')),
-                ],
-              ),
-            ),
-            
-            // Tabla de Empleados
-            _buildPdfTable(),
-          ];
-        },
-      ),
-    );
-
-    final bytes = await pdf.save();
-
-    // Obtener el directorio de descargas
-    Directory? directory;
-    if (Platform.isAndroid) {
-      directory = Directory('/storage/emulated/0/Download');
-      if (!await directory.exists()) {
-        directory = await getExternalStorageDirectory();
-      }
-    } else if (Platform.isIOS) {
-      directory = await getApplicationDocumentsDirectory();
-    } else {
-      directory = await getDownloadsDirectory();
-    }
-
-    if (directory == null) {
-      throw Exception('No se pudo acceder al directorio de almacenamiento');
-    }
-
-    // Crear nombre del archivo
-    final timestamp = DateTime.now();
-    final fileName = 'Reporte_Personal_${timestamp.day}-${timestamp.month}-${timestamp.year}_${timestamp.hour}-${timestamp.minute}.pdf';
-    final file = File('${directory.path}/$fileName');
-
-    // Guardar el archivo
-    await file.writeAsBytes(bytes);
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('PDF guardado en: ${directory.path}/$fileName'),
-        duration: const Duration(seconds: 4),
-        action: SnackBarAction(
-          label: 'Abrir',
-          onPressed: () async {
-            await Printing.sharePdf(bytes: bytes, filename: fileName);
-          },
+  await PDFExportHelper.exportToPDF<Empleado>(
+    context: context,
+    data: empleadosFiltrados,
+    title: 'Reporte de Personal',
+    fileName: 'Reporte_Personal',
+    filters: filters,
+    buildContent: (empleados) {
+      return [
+        PDFExportHelper.buildTable(
+          headers: ['ID', 'Nombre', 'Puesto', 'Sueldo (MXN)', 'Vacaciones', 'Estado'],
+          data: empleados.map((empleado) {
+            return [
+              empleado.id,
+              empleado.nombre,
+              empleado.puesto,
+              '\$${empleado.sueldo.toStringAsFixed(2)}',
+              empleado.vacacionesPendientes.toString(),
+              empleado.activo ? 'Activo' : 'Inactivo',
+            ];
+          }).toList(),
+          headerDecoration: const pw.BoxDecoration(
+            color: PdfColor.fromInt(0xFF84B9BF),
+          ),
+          oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey100),
         ),
-      ),
-    );
-  } catch (e) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Error al exportar: $e')),
-    );
-  }
+      ];
+    },
+  );
 }
-  pw.Widget _buildPdfTable() {
-    // ... (Código de _buildPdfTable)
-    const tableHeaders = ['ID', 'Nombre', 'Puesto', 'Sueldo (MXN)', 'Vacaciones', 'Estado'];
-
-    return pw.Table.fromTextArray(
-      headers: tableHeaders,
-      data: empleadosFiltrados.map((empleado) {
-        return [
-          empleado.id,
-          empleado.nombre,
-          empleado.puesto,
-          '\$${empleado.sueldo.toStringAsFixed(2)}',
-          empleado.vacacionesPendientes.toString(),
-          empleado.activo ? 'Activo' : 'Inactivo',
-        ];
-      }).toList(),
-      border: pw.TableBorder.all(color: PdfColor.fromHex('#84B9BF')),
-      headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white),
-      headerDecoration: const pw.BoxDecoration(color: PdfColor.fromInt(0xFF84B9BF)),
-      cellAlignment: pw.Alignment.centerLeft,
-      cellPadding: const pw.EdgeInsets.all(6),
-      oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey100),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {

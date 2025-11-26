@@ -8,6 +8,8 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
+import 'package:fynix/helpers/pdf_export_helper.dart'; 
+
 class AlmacenScreen extends StatefulWidget {
   const AlmacenScreen({super.key});
 
@@ -275,123 +277,64 @@ class _AlmacenScreenState extends State<AlmacenScreen> {
     );
   }
 
-  // Función de exportar a PDF (actualizada para incluir filtros)
-  Future<void> _exportToPDF() async {
-    if (productsFiltrados.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No hay resultados para exportar')),
-      );
-      return;
+// Reemplaza el método _exportToPDF() con este código simplificado:
+Future<void> _exportToPDF() async {
+  Map<String, dynamic>? filters;
+  
+  if (filtroCampoSeleccionado != null || filtroMesSeleccionado != null) {
+    filters = {};
+    if (filtroCampoSeleccionado != null) {
+      filters['Campo'] = _getNombreCampo(filtroCampoSeleccionado!);
     }
-    
-    final pdf = pw.Document();
-
-    pdf.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(32),
-        build: (pw.Context context) {
-          return [
-            // Encabezado
-            pw.Header(
-              level: 0,
-              child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Text(
-                    'Reporte de Almacén',
-                    style: pw.TextStyle(
-                      fontSize: 24,
-                      fontWeight: pw.FontWeight.bold,
-                      color: PdfColor.fromHex('#84B9BF'),
-                    ),
-                  ),
-                  pw.SizedBox(height: 8),
-                  pw.Text(
-                    'Fecha de generación: ${_formatDate(DateTime.now())}',
-                    style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey700),
-                  ),
-                  if (filtroCampoSeleccionado != null || filtroMesSeleccionado != null) ...[
-                    pw.SizedBox(height: 8),
-                    pw.Text(
-                      'Filtros aplicados:',
-                      style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
-                    ),
-                    if (filtroCampoSeleccionado != null)
-                      pw.Text(
-                        '• Campo: ${_getNombreCampo(filtroCampoSeleccionado!)}',
-                        style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700),
-                      ),
-                    if (filtroMesSeleccionado != null)
-                      pw.Text(
-                        '• Mes: ${filtroMesSeleccionado!.toUpperCase()}',
-                        style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700),
-                      ),
-                  ],
-                  pw.SizedBox(height: 4),
-                  pw.Text(
-                    'Total de resultados: ${productsFiltrados.length}',
-                    style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
-                  ),
-                  pw.Divider(thickness: 2, color: PdfColor.fromHex('#84B9BF')),
-                ],
-              ),
-            ),
-            pw.SizedBox(height: 20),
-            
-            // Tabla de Productos
-            pw.Text(
-              'Resumen de Productos',
-              style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
-            ),
-            pw.SizedBox(height: 15),
-            pw.Table.fromTextArray(
-              headers: ['Producto', 'SKU', 'Stock', 'Costo', 'Venta', 'Ganancia', 'Margen'],
-              data: productsFiltrados.map((product) {
-                return [
-                  product.name,
-                  product.sku,
-                  product.stock.toString(),
-                  '\$${product.cost.toStringAsFixed(0)}',
-                  '\$${product.sale.toStringAsFixed(0)}',
-                  '\$${product.profit.toStringAsFixed(0)}',
-                  '${product.margin.toStringAsFixed(2)}%',
-                ];
-              }).toList(),
-              headerStyle: pw.TextStyle(
-                fontWeight: pw.FontWeight.bold,
-                fontSize: 10,
-              ),
-              cellStyle: const pw.TextStyle(fontSize: 9),
-              headerDecoration: const pw.BoxDecoration(
-                color: PdfColors.grey300,
-              ),
-              cellAlignment: pw.Alignment.centerLeft,
-            ),
-            pw.SizedBox(height: 30),
-            // Estadísticas (se mantienen igual)
-            pw.Text(
-              'Estadísticas',
-              style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
-            ),
-            pw.SizedBox(height: 10),
-            pw.Text('Total de productos: ${productsFiltrados.length}'),
-            pw.Text(
-              'Stock total: ${productsFiltrados.fold<int>(0, (sum, p) => sum + p.stock)}',
-            ),
-            pw.Text(
-              'Valor total en inventario: \$${productsFiltrados.fold<double>(0, (sum, p) => sum + (p.cost * p.stock)).toStringAsFixed(0)} MXN',
-            ),
-          ];
-        },
-      ),
-    );
-
-    await Printing.layoutPdf(
-      onLayout: (PdfPageFormat format) async => pdf.save(),
-      name: 'Almacen_${DateTime.now().millisecondsSinceEpoch}.pdf',
-    );
+    if (filtroMesSeleccionado != null) {
+      filters['Mes'] = filtroMesSeleccionado!.toUpperCase();
+    }
   }
+
+  await PDFExportHelper.exportToPDF<Product>(
+    context: context,
+    data: productsFiltrados,
+    title: 'Reporte de Almacén',
+    fileName: 'Almacen',
+    filters: filters,
+    buildContent: (products) {
+      return [
+        pw.Text(
+          'Resumen de Productos',
+          style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
+        ),
+        pw.SizedBox(height: 15),
+        PDFExportHelper.buildTable(
+          headers: ['Producto', 'SKU', 'Stock', 'Costo', 'Venta', 'Ganancia', 'Margen'],
+          data: products.map((product) {
+            return [
+              product.name,
+              product.sku,
+              product.stock.toString(),
+              '\$${product.cost.toStringAsFixed(0)}',
+              '\$${product.sale.toStringAsFixed(0)}',
+              '\$${product.profit.toStringAsFixed(0)}',
+              '${product.margin.toStringAsFixed(2)}%',
+            ];
+          }).toList(),
+        ),
+        pw.SizedBox(height: 30),
+        pw.Text(
+          'Estadísticas',
+          style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
+        ),
+        pw.SizedBox(height: 10),
+        pw.Text('Total de productos: ${products.length}'),
+        pw.Text(
+          'Stock total: ${products.fold<int>(0, (sum, p) => sum + p.stock)}',
+        ),
+        pw.Text(
+          'Valor total en inventario: \$${products.fold<double>(0, (sum, p) => sum + (p.cost * p.stock)).toStringAsFixed(0)} MXN',
+        ),
+      ];
+    },
+  );
+}
 
   void _agregarProducto() {
     final nombreController = TextEditingController();
