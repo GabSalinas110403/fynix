@@ -136,7 +136,6 @@ class _PersonalScreenState extends State<PersonalScreen> {
 
   int get empleadosActivos => empleados.where((e) => e.activo).length;
   int get vacacionesPendientes => empleados.where((e) => e.activo).fold(0, (sum, e) => sum + e.vacacionesPendientes);
-  int get proximosEventos => 1;
 
   String _getNombreCampo(String campo) {
     switch (campo) {
@@ -666,7 +665,7 @@ class _PersonalScreenState extends State<PersonalScreen> {
               background: Container(
                 color: PersonalScreen.primaryColor,
                 // Reducir el padding inferior para dar más espacio
-                padding: const EdgeInsets.only(top: 80, bottom: 8, left: 16, right: 16),
+                padding: const EdgeInsets.only(top: 40, bottom: 40, left: 16, right: 16),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
@@ -685,7 +684,7 @@ class _PersonalScreenState extends State<PersonalScreen> {
                         color: Colors.white70,
                       ),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 30),
                     // Stats en la AppBar expandida
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 0.0),
@@ -707,14 +706,7 @@ class _PersonalScreenState extends State<PersonalScreen> {
                               Colors.white,
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: _buildStatContainer(
-                              'Próximos eventos:',
-                              proximosEventos.toString(),
-                              Colors.white,
-                            ),
-                          ),
+                          const SizedBox(width: 8)
                         ],
                       ),
                     ),

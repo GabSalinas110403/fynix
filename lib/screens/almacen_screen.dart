@@ -1105,7 +1105,7 @@ class _ProfitMarginChartState extends State<ProfitMarginChart> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
-                    "Margen de Ganancia por Producto",
+                    "Margen de Ganancia",
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
