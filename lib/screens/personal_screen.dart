@@ -7,6 +7,9 @@ import 'home_screen.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
+import 'package:permission_handler/permission_handler.dart';
 
 class PersonalScreen extends StatefulWidget {
   const PersonalScreen({super.key});
@@ -543,15 +546,30 @@ class _PersonalScreenState extends State<PersonalScreen> {
     );
   }
 
-  Future<void> _exportarAPDF() async {
-    // ... (Código de _exportarAPDF)
-    if (empleadosFiltrados.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No hay resultados para exportar')),
-      );
-      return;
+Future<void> _exportarAPDF() async {
+  if (empleadosFiltrados.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('No hay resultados para exportar')),
+    );
+    return;
+  }
+
+  try {
+    // Solicitar permisos de almacenamiento
+    if (Platform.isAndroid || Platform.isIOS) {
+      var status = await Permission.storage.status;
+      if (!status.isGranted) {
+        status = await Permission.storage.request();
+        if (!status.isGranted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Se requieren permisos de almacenamiento')),
+          );
+          return;
+        }
+      }
     }
 
+    // Crear el PDF
     final pdf = pw.Document();
 
     pdf.addPage(
@@ -598,16 +616,49 @@ class _PersonalScreenState extends State<PersonalScreen> {
 
     final bytes = await pdf.save();
 
-    await Printing.sharePdf(
-      bytes: bytes,
-      filename: 'Reporte_Personal_${DateTime.now().millisecondsSinceEpoch}.pdf',
+    // Obtener el directorio de descargas
+    Directory? directory;
+    if (Platform.isAndroid) {
+      directory = Directory('/storage/emulated/0/Download');
+      if (!await directory.exists()) {
+        directory = await getExternalStorageDirectory();
+      }
+    } else if (Platform.isIOS) {
+      directory = await getApplicationDocumentsDirectory();
+    } else {
+      directory = await getDownloadsDirectory();
+    }
+
+    if (directory == null) {
+      throw Exception('No se pudo acceder al directorio de almacenamiento');
+    }
+
+    // Crear nombre del archivo
+    final timestamp = DateTime.now();
+    final fileName = 'Reporte_Personal_${timestamp.day}-${timestamp.month}-${timestamp.year}_${timestamp.hour}-${timestamp.minute}.pdf';
+    final file = File('${directory.path}/$fileName');
+
+    // Guardar el archivo
+    await file.writeAsBytes(bytes);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('PDF guardado en: ${directory.path}/$fileName'),
+        duration: const Duration(seconds: 4),
+        action: SnackBarAction(
+          label: 'Abrir',
+          onPressed: () async {
+            await Printing.sharePdf(bytes: bytes, filename: fileName);
+          },
+        ),
+      ),
     );
-    
-    ScaffoldMessenger.of(this.context).showSnackBar(
-      const SnackBar(content: Text('PDF generado y listo para compartir')),
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Error al exportar: $e')),
     );
   }
-
+}
   pw.Widget _buildPdfTable() {
     // ... (Código de _buildPdfTable)
     const tableHeaders = ['ID', 'Nombre', 'Puesto', 'Sueldo (MXN)', 'Vacaciones', 'Estado'];
