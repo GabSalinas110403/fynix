@@ -9,6 +9,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../widgets/custom_drawer.dart';
+import 'package:fynix/helpers/pdf_export_helper.dart';
 
 class FinanzasScreen extends StatefulWidget {
   const FinanzasScreen({super.key});
@@ -208,61 +209,123 @@ class _FinanzasScreenState extends State<FinanzasScreen> {
 
   double get totalRestante => totalIngresos - totalGastos;
 
-  // ------------------------------------------------------
-  // GENERAR Y DESCARGAR PDF
-  // ------------------------------------------------------
 Future<void> generarPDF() async {
-  final pdf = pw.Document();
+  await PDFExportHelper.exportToPDF<Map<String, dynamic>>(
+    context: context,
+    data: registros,
+    title: 'Reporte de Finanzas',
+    fileName: 'Reporte_Finanzas',
+    buildContent: (registros) {
+      // Ordenar por fecha descendente
+      final sortedRegistros = List<Map<String, dynamic>>.from(registros)
+        ..sort((a, b) => b["fecha"].compareTo(a["fecha"]));
 
-  pdf.addPage(
-    pw.MultiPage(
-      pageFormat: PdfPageFormat.a4,
-      build: (context) => [
-        pw.Center(
-          child: pw.Text(
-            "Reporte de Finanzas",
-            style: pw.TextStyle(
-              fontSize: 28,
-              fontWeight: pw.FontWeight.bold,
-              color: PdfColor.fromHex('#06373E'),
-            ),
-          ),
+      return [
+        // Resumen General
+        pw.Text(
+          'Resumen General',
+          style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
         ),
-        pw.SizedBox(height: 20),
-        pw.Text("Resumen General",
-            style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
-        pw.Divider(thickness: 1, color: PdfColor.fromHex('#84B9BF')),
-        _buildPdfRow("Ingresos Totales:", totalIngresos, PdfColors.green),
-        _buildPdfRow("Gastos Totales:", totalGastos, PdfColors.red),
-        _buildPdfRow("Balance Final:", totalRestante, PdfColors.blue),
-        pw.SizedBox(height: 20),
-        pw.Text("Detalle de Movimientos",
-            style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
         pw.Divider(thickness: 1, color: PdfColor.fromHex('#84B9BF')),
         pw.SizedBox(height: 10),
-        _buildPdfTable(),
-      ],
-    ),
+        
+        // Fila de Ingresos
+        pw.Padding(
+          padding: const pw.EdgeInsets.symmetric(vertical: 4),
+          child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text(
+                'Ingresos Totales:',
+                style: const pw.TextStyle(fontSize: 14),
+              ),
+              pw.Text(
+                '\$${totalIngresos.toStringAsFixed(2)} MXN',
+                style: pw.TextStyle(
+                  fontSize: 14,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColors.green,
+                ),
+              ),
+            ],
+          ),
+        ),
+        
+        // Fila de Gastos
+        pw.Padding(
+          padding: const pw.EdgeInsets.symmetric(vertical: 4),
+          child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text(
+                'Gastos Totales:',
+                style: const pw.TextStyle(fontSize: 14),
+              ),
+              pw.Text(
+                '\$${totalGastos.toStringAsFixed(2)} MXN',
+                style: pw.TextStyle(
+                  fontSize: 14,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColors.red,
+                ),
+              ),
+            ],
+          ),
+        ),
+        
+        // Fila de Balance
+        pw.Padding(
+          padding: const pw.EdgeInsets.symmetric(vertical: 4),
+          child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text(
+                'Balance Final:',
+                style: const pw.TextStyle(fontSize: 14),
+              ),
+              pw.Text(
+                '\$${totalRestante.toStringAsFixed(2)} MXN',
+                style: pw.TextStyle(
+                  fontSize: 14,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColors.blue,
+                ),
+              ),
+            ],
+          ),
+        ),
+        
+        pw.SizedBox(height: 20),
+        
+        // Detalle de Movimientos
+        pw.Text(
+          'Detalle de Movimientos',
+          style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
+        ),
+        pw.Divider(thickness: 1, color: PdfColor.fromHex('#84B9BF')),
+        pw.SizedBox(height: 10),
+        
+        // Tabla de movimientos
+        PDFExportHelper.buildTable(
+          headers: ['Tipo', 'Descripción', 'Cantidad (MXN)', 'Fecha'],
+          data: sortedRegistros.map((e) {
+            final isIngreso = e['tipo'] == 'ingreso';
+            return [
+              isIngreso ? 'INGRESO' : 'GASTO',
+              e['nombre'].toString(),
+              '${isIngreso ? '+' : '-'} \$${e['cantidad'].toStringAsFixed(2)}',
+              DateFormat('dd/MM/yyyy HH:mm').format(e['fecha']),
+            ];
+          }).toList(),
+          headerDecoration: const pw.BoxDecoration(
+            color: PdfColor.fromInt(0xFF84B9BF),
+          ),
+          oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey100),
+        ),
+      ];
+    },
   );
-
-  final bytes = await pdf.save();
-
-
-  // ------------------------------------------------------------------
-  // COMPATIBLE CON ANDROID: Compartir o Guardar PDF sin errores
-  // ------------------------------------------------------------------
-  await Printing.sharePdf(
-    bytes: bytes,
-    filename: 'Reporte_Finanzas_${DateTime.now().millisecondsSinceEpoch}.pdf',
-  );
-
-  if (mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('PDF generado y listo para compartir')),
-    );
-  }
 }
-
   pw.Widget _buildPdfTable() {
     final tableHeaders = ['Tipo', 'Descripción', 'Cantidad (MXN)', 'Fecha'];
 
@@ -718,22 +781,4 @@ Future<void> generarPDF() async {
       ),
     );
   }
-}
-
-class Empleado {
-  final String id;
-  final String nombre;
-  final String puesto;
-  final double sueldo;
-  final int vacacionesPendientes;
-  final bool activo;
-
-  Empleado({
-    required this.id,
-    required this.nombre,
-    required this.puesto,
-    required this.sueldo,
-    required this.vacacionesPendientes,
-    required this.activo,
-  });
 }
