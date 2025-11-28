@@ -30,6 +30,12 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
   String? filtroCampoSeleccionado; // 'nombre', 'id', 'descripcion'
   String? filtroMesSeleccionado;
 
+  // Agregar estas líneas:
+  static const String _proveedoresKey = 'proveedores_list';
+  bool _mostrarMensajeBienvenida = false;
+  bool _mensajeMostrado = false;
+
+
   @override
   void initState() {
     super.initState();
@@ -56,28 +62,97 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
     }
   }
 
-  void _initializeProveedores() {
-    proveedores = [
-      Proveedor(
-        id: 'PRO-001',
-        nombre: 'Suministros Tecnológicos del Norte S.A. de C.V.',
-        fecha: '15 sep 2025',
-        descripcion: 'Suministros de Papel de oficina, tóner para impresoras, productos de limpieza.',
+  // Reemplazado: ahora carga desde SharedPreferences y controla el mensaje de bienvenida.
+  Future<void> _initializeProveedores() async {
+    
+    final prefs = await SharedPreferences.getInstance();
+    final String? proveedoresString = prefs.getString(_proveedoresKey);
+
+    if (proveedoresString != null) {
+      try {
+        final List<dynamic> proveedoresJson = jsonDecode(proveedoresString);
+        setState(() {
+          proveedores = proveedoresJson
+              .map((json) => Proveedor.fromJson(json as Map<String, dynamic>))
+              .toList();
+          proveedoresFiltrados = List.from(proveedores);
+          _mostrarMensajeBienvenida = false; // No mostrar si hay datos
+        });
+      } catch (e) {
+        // Si algo falla al parsear, inicializamos vacío y mostramos mensaje.
+        setState(() {
+          proveedores = [];
+          proveedoresFiltrados = [];
+          _mostrarMensajeBienvenida = true;
+        });
+      }
+    } else {
+      setState(() {
+        proveedores = [];
+        proveedoresFiltrados = [];
+        _mostrarMensajeBienvenida = true; // Mostrar si no hay datos
+      });
+    }
+
+    if (proveedores.isEmpty && !_mensajeMostrado) {
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    _mostrarMensajeBienvenidaPopup();
+  });
+  _mensajeMostrado = true;
+}
+  }
+
+void _mostrarMensajeBienvenidaPopup() {
+  showDialog(
+  context: context,
+  builder: (context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
       ),
-      Proveedor(
-        id: 'PRO-002',
-        nombre: 'Mobiliario Fénix Express S. de R.L.',
-        fecha: '10 oct 2025',
-        descripcion: 'Escritorios ergonómicos, sillas de oficina y archivadores metálicos.',
+      title: const Text(
+        "Bienvenido",
+        style: TextStyle(
+          fontSize: 24,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.5,
+          color: Colors.black87,
+        ),
       ),
-      Proveedor(
-        id: 'PRO-003',
-        nombre: 'Servicios de Internet Ultra',
-        fecha: '22 nov 2025',
-        descripcion: 'Servicio de Internet de alta velocidad y telefonía IP para oficinas.',
+      content: const Text(
+        "Aquí puedes administrar todos los proveedores de tu negocio. "
+        "Agrega nuevos, edita su información o elimínalos cuando ya no los necesites.\n\n"
+        "Para comenzar, toca el botón \"Agregar proveedor\" y registra el primero.",
+        style: TextStyle(
+          fontSize: 16,
+          height: 1.45, // Aumenta legibilidad
+          color: Colors.black54,
+        ),
       ),
-    ];
-    proveedoresFiltrados = List.from(proveedores);
+      actionsPadding: const EdgeInsets.only(bottom: 12, right: 12),
+      actions: [
+        TextButton(
+          child: const Text(
+            "Cerrar",
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.teal,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ],
+    );
+  },
+);
+}
+
+  // Método para guardar proveedores en SharedPreferences
+  Future<void> _saveProveedores() async {
+    final prefs = await SharedPreferences.getInstance();
+    final List<Map<String, dynamic>> lista = proveedores.map((p) => p.toJson()).toList();
+    await prefs.setString(_proveedoresKey, jsonEncode(lista));
   }
 
   void _filterProveedores() {
@@ -306,7 +381,7 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
             child: const Text('Cancelar'),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               if (nombreController.text.trim().isEmpty) return;
 
               setState(() {
@@ -320,7 +395,9 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
                   ),
                 );
                 _filterProveedores();
+                _mostrarMensajeBienvenida = false; // Ocultar mensaje al agregar
               });
+              await _saveProveedores(); // AGREGADA persistencia
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Proveedor agregado exitosamente')),
@@ -375,7 +452,7 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
             child: const Text('Cancelar'),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               if (nombreController.text.trim().isEmpty) return;
 
               setState(() {
@@ -390,6 +467,7 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
                   _filterProveedores();
                 }
               });
+              await _saveProveedores(); // AGREGADA persistencia
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Proveedor actualizado exitosamente')),
@@ -419,11 +497,16 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
             child: const Text('Cancelar'),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               setState(() {
                 proveedores.removeWhere((p) => p.id == proveedor.id);
                 _filterProveedores();
+                // Si ya no hay proveedores, mostrar mensaje
+                if (proveedores.isEmpty) {
+                  _mostrarMensajeBienvenida = true;
+                }
               });
+              await _saveProveedores(); // AGREGADA persistencia
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Proveedor eliminado')),
@@ -458,85 +541,85 @@ class _ProveedoresScreenState extends State<ProveedoresScreen> {
     }
   }
 
-Future<void> _exportarAPDF() async {
-  Map<String, dynamic>? filters;
-  
-  if (filtroCampoSeleccionado != null || filtroMesSeleccionado != null) {
-    filters = {};
-    if (filtroCampoSeleccionado != null) {
-      filters['Campo'] = _getNombreCampo(filtroCampoSeleccionado!);
+  Future<void> _exportarAPDF() async {
+    Map<String, dynamic>? filters;
+    
+    if (filtroCampoSeleccionado != null || filtroMesSeleccionado != null) {
+      filters = {};
+      if (filtroCampoSeleccionado != null) {
+        filters['Campo'] = _getNombreCampo(filtroCampoSeleccionado!);
+      }
+      if (filtroMesSeleccionado != null) {
+        filters['Mes'] = filtroMesSeleccionado!.toUpperCase();
+      }
     }
-    if (filtroMesSeleccionado != null) {
-      filters['Mes'] = filtroMesSeleccionado!.toUpperCase();
-    }
-  }
 
-  await PDFExportHelper.exportToPDF<Proveedor>(
-    context: context,
-    data: proveedoresFiltrados,
-    title: 'Reporte de Proveedores',
-    fileName: 'Proveedores',
-    filters: filters,
-    buildContent: (proveedores) {
-      return proveedores.map((proveedor) {
-        return pw.Container(
-          margin: const pw.EdgeInsets.only(bottom: 16),
-          padding: const pw.EdgeInsets.all(12),
-          decoration: pw.BoxDecoration(
-            border: pw.Border.all(
-              color: PdfColor.fromHex('#84B9BF'),
-              width: 1,
+    await PDFExportHelper.exportToPDF<Proveedor>(
+      context: context,
+      data: proveedoresFiltrados,
+      title: 'Reporte de Proveedores',
+      fileName: 'Proveedores',
+      filters: filters,
+      buildContent: (proveedores) {
+        return proveedores.map((proveedor) {
+          return pw.Container(
+            margin: const pw.EdgeInsets.only(bottom: 16),
+            padding: const pw.EdgeInsets.all(12),
+            decoration: pw.BoxDecoration(
+              border: pw.Border.all(
+                color: PdfColor.fromHex('#84B9BF'),
+                width: 1,
+              ),
+              borderRadius: pw.BorderRadius.circular(8),
             ),
-            borderRadius: pw.BorderRadius.circular(8),
-          ),
-          child: pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Expanded(
-                    child: pw.Text(
-                      proveedor.nombre,
-                      style: pw.TextStyle(
-                        fontSize: 14,
-                        fontWeight: pw.FontWeight.bold,
-                        color: PdfColor.fromHex('#06373E'),
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Expanded(
+                      child: pw.Text(
+                        proveedor.nombre,
+                        style: pw.TextStyle(
+                          fontSize: 14,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColor.fromHex('#06373E'),
+                        ),
                       ),
                     ),
-                  ),
-                  pw.Text(
-                    proveedor.fecha,
-                    style: const pw.TextStyle(
-                      fontSize: 10,
-                      color: PdfColors.grey600,
+                    pw.Text(
+                      proveedor.fecha,
+                      style: const pw.TextStyle(
+                        fontSize: 10,
+                        color: PdfColors.grey600,
+                      ),
                     ),
+                  ],
+                ),
+                pw.SizedBox(height: 4),
+                pw.Text(
+                  'ID: ${proveedor.id}',
+                  style: const pw.TextStyle(
+                    fontSize: 12,
+                    color: PdfColors.grey700,
                   ),
-                ],
-              ),
-              pw.SizedBox(height: 4),
-              pw.Text(
-                'ID: ${proveedor.id}',
-                style: const pw.TextStyle(
-                  fontSize: 12,
-                  color: PdfColors.grey700,
                 ),
-              ),
-              pw.SizedBox(height: 8),
-              pw.Text(
-                proveedor.descripcion,
-                style: const pw.TextStyle(
-                  fontSize: 11,
-                  color: PdfColors.grey800,
+                pw.SizedBox(height: 8),
+                pw.Text(
+                  proveedor.descripcion,
+                  style: const pw.TextStyle(
+                    fontSize: 11,
+                    color: PdfColors.grey800,
+                  ),
                 ),
-              ),
-            ],
-          ),
-        );
-      }).toList();
-    },
-  );
-}
+              ],
+            ),
+          );
+        }).toList();
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -564,7 +647,7 @@ Future<void> _exportarAPDF() async {
               title: Container(),
               background: Container(
                 color: ProveedoresScreen.primaryColor,
-                padding: const EdgeInsets.only(top: 80, bottom: 20, left: 16, right: 16),
+                padding: const EdgeInsets.only(top: 0, bottom: 40, left: 16, right: 16),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
@@ -838,6 +921,7 @@ Future<void> _exportarAPDF() async {
   }
 }
 
+// Clase Proveedor actualizada con serialización JSON
 class Proveedor {
   final String id;
   final String nombre;
@@ -850,4 +934,22 @@ class Proveedor {
     required this.fecha,
     required this.descripcion,
   });
+
+  // Convertir a JSON
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'nombre': nombre,
+    'fecha': fecha,
+    'descripcion': descripcion,
+  };
+
+  // Crear desde JSON
+  factory Proveedor.fromJson(Map<String, dynamic> json) {
+    return Proveedor(
+      id: json['id'] as String,
+      nombre: json['nombre'] as String,
+      fecha: json['fecha'] as String,
+      descripcion: json['descripcion'] as String,
+    );
+  }
 }

@@ -1,3 +1,4 @@
+// personal_screen.dart
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
@@ -11,8 +12,7 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:permission_handler/permission_handler.dart';
 
-import 'package:fynix/helpers/pdf_export_helper.dart'; 
-
+import 'package:fynix/helpers/pdf_export_helper.dart';
 
 class PersonalScreen extends StatefulWidget {
   const PersonalScreen({super.key});
@@ -35,6 +35,11 @@ class _PersonalScreenState extends State<PersonalScreen> {
   String? filtroCampoSeleccionado; // 'nombre', 'id', 'puesto'
   bool? filtroActivoSeleccionado; // true (Activos), false (Inactivos), null (Todos)
 
+  // Persistencia y mensajes
+  static const String _empleadosKey = 'empleados_list';
+  bool _mostrarMensajeBienvenida = false;
+  bool _mensajeMostrado = false;
+
   @override
   void initState() {
     super.initState();
@@ -54,105 +59,54 @@ class _PersonalScreenState extends State<PersonalScreen> {
     final String? tasksString = prefs.getString('user_tasks');
 
     if (tasksString != null) {
-      final List<dynamic> taskListJson = jsonDecode(tasksString);
-      setState(() {
-        allTasks = taskListJson.map((json) => Task.fromJson(json)).toList();
-      });
+      try {
+        final List<dynamic> taskListJson = jsonDecode(tasksString);
+        setState(() {
+          allTasks = taskListJson.map((json) => Task.fromJson(json)).toList();
+        });
+      } catch (e) {
+        // ignore parsing errors for tasks
+      }
     }
   }
 
-  void _initializeEmpleados() {
-    empleados = [
-      Empleado(
-        id: 'EMP-001',
-        nombre: 'Juan Pérez García',
-        puesto: 'Gerente General',
-        sueldo: 25000.00,
-        vacacionesPendientes: 5,
-        activo: true,
-      ),
-      Empleado(
-        id: 'EMP-002',
-        nombre: 'María López Hernández',
-        puesto: 'Contador',
-        sueldo: 18000.00,
-        vacacionesPendientes: 0,
-        activo: true,
-      ),
-      Empleado(
-        id: 'EMP-003',
-        nombre: 'Carlos Ramírez Torres',
-        puesto: 'Desarrollador Senior',
-        sueldo: 22000.00,
-        vacacionesPendientes: 3,
-        activo: true,
-      ),
-      Empleado(
-        id: 'EMP-004',
-        nombre: 'Ana Martínez Sánchez',
-        puesto: 'Recursos Humanos',
-        sueldo: 16000.00,
-        vacacionesPendientes: 2,
-        activo: true,
-      ),
-      Empleado(
-        id: 'EMP-005',
-        nombre: 'Pedro Gómez Ruiz',
-        puesto: 'Ventas',
-        sueldo: 15000.00,
-        vacacionesPendientes: 1,
-        activo: false,
-      ),
-    ];
-    empleadosFiltrados = List.from(empleados);
-  }
+  // Inicializa empleados desde SharedPreferences. Si no hay datos, muestra popup de bienvenida.
+  Future<void> _initializeEmpleados() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String? empleadosString = prefs.getString(_empleadosKey);
 
-  void _filterEmpleados() {
-    String query = searchController.text.toLowerCase().trim();
-    setState(() {
-      empleadosFiltrados = empleados.where((empleado) {
-        // 1. Filtro de búsqueda por texto y campo seleccionado
-        bool matchesSearch = query.isEmpty;
+    if (empleadosString != null) {
+      try {
+        final List<dynamic> empleadosJson = jsonDecode(empleadosString);
+        setState(() {
+          empleados = empleadosJson
+              .map((json) => Empleado.fromJson(json as Map<String, dynamic>))
+              .toList();
+          empleadosFiltrados = List.from(empleados);
+          _mostrarMensajeBienvenida = false;
+        });
+      } catch (e) {
+        setState(() {
+          empleados = [];
+          empleadosFiltrados = [];
+          _mostrarMensajeBienvenida = true;
+        });
+      }
+    } else {
+      // No hay empleados guardados -> vacio
+      setState(() {
+        empleados = [];
+        empleadosFiltrados = [];
+        _mostrarMensajeBienvenida = true;
+      });
+    }
 
-        if (!matchesSearch && query.isNotEmpty) {
-          if (filtroCampoSeleccionado == 'nombre') {
-            matchesSearch = empleado.nombre.toLowerCase().contains(query);
-          } else if (filtroCampoSeleccionado == 'id') {
-            matchesSearch = empleado.id.toLowerCase().contains(query);
-          } else if (filtroCampoSeleccionado == 'puesto') {
-            matchesSearch = empleado.puesto.toLowerCase().contains(query);
-          } else {
-            // Si no hay campo seleccionado, buscar en todos
-            matchesSearch = empleado.nombre.toLowerCase().contains(query) ||
-                empleado.id.toLowerCase().contains(query) ||
-                empleado.puesto.toLowerCase().contains(query);
-          }
-        } else if (query.isEmpty) {
-          matchesSearch = true;
-        }
-
-        // 2. Filtro por estado (Activo/Inactivo)
-        bool matchesActivo = filtroActivoSeleccionado == null ||
-            empleado.activo == filtroActivoSeleccionado;
-
-        return matchesSearch && matchesActivo;
-      }).toList();
-    });
-  }
-
-  int get empleadosActivos => empleados.where((e) => e.activo).length;
-  int get vacacionesPendientes => empleados.where((e) => e.activo).fold(0, (sum, e) => sum + e.vacacionesPendientes);
-
-  String _getNombreCampo(String campo) {
-    switch (campo) {
-      case 'nombre':
-        return 'Nombre';
-      case 'id':
-        return 'ID';
-      case 'puesto':
-        return 'Puesto';
-      default:
-        return '';
+    // Mostrar popup una vez por carga si no hay empleados
+    if (empleados.isEmpty && !_mensajeMostrado) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _mostrarMensajeBienvenidaPopup();
+      });
+      _mensajeMostrado = true;
     }
   }
 
@@ -317,11 +271,114 @@ class _PersonalScreenState extends State<PersonalScreen> {
     );
   }
 
+  void _mostrarMensajeBienvenidaPopup() {
+    showDialog(
+      context: context,
+      barrierDismissible: false, // No cerrar tocando fuera
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: const Text(
+            "Bienvenido",
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.5,
+              color: Colors.black87,
+            ),
+          ),
+          content: const Text(
+            "Aquí puedes agregar los colaboradores de tu empresa. "
+            "Gestiona su información, edita sus datos o elimínalos cuando sea necesario.\n\n"
+            
+            "Para comenzar, toca el botón \"Agregar empleado\" y registra el primero.",
+            style: TextStyle(
+              fontSize: 16,
+              height: 1.45,
+              color: Colors.black54,
+            ),
+          ),
+          actionsPadding: const EdgeInsets.only(bottom: 12, right: 12),
+          actions: [
+            TextButton(
+              child: const Text(
+                "Cerrar",
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.teal,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _saveEmpleados() async {
+    final prefs = await SharedPreferences.getInstance();
+    final List<Map<String, dynamic>> lista = empleados.map((e) => e.toJson()).toList();
+    await prefs.setString(_empleadosKey, jsonEncode(lista));
+  }
+
+  void _filterEmpleados() {
+    String query = searchController.text.toLowerCase().trim();
+    setState(() {
+      empleadosFiltrados = empleados.where((empleado) {
+        // 1. Filtro de búsqueda por texto y campo seleccionado
+        bool matchesSearch = query.isEmpty;
+
+        if (!matchesSearch && query.isNotEmpty) {
+          if (filtroCampoSeleccionado == 'nombre') {
+            matchesSearch = empleado.nombre.toLowerCase().contains(query);
+          } else if (filtroCampoSeleccionado == 'id') {
+            matchesSearch = empleado.id.toLowerCase().contains(query);
+          } else if (filtroCampoSeleccionado == 'puesto') {
+            matchesSearch = empleado.puesto.toLowerCase().contains(query);
+          } else {
+            // Si no hay campo seleccionado, buscar en todos
+            matchesSearch = empleado.nombre.toLowerCase().contains(query) ||
+                empleado.id.toLowerCase().contains(query) ||
+                empleado.puesto.toLowerCase().contains(query);
+          }
+        } else if (query.isEmpty) {
+          matchesSearch = true;
+        }
+
+        // 2. Filtro por estado (Activo/Inactivo)
+        bool matchesActivo = filtroActivoSeleccionado == null ||
+            empleado.activo == filtroActivoSeleccionado;
+
+        return matchesSearch && matchesActivo;
+      }).toList();
+    });
+  }
+
+  int get empleadosActivos => empleados.where((e) => e.activo).length;
+  int get vacacionesPendientes => empleados.where((e) => e.activo).fold(0, (sum, e) => sum + e.vacacionesPendientes);
+
+  String _getNombreCampo(String campo) {
+    switch (campo) {
+      case 'nombre':
+        return 'Nombre';
+      case 'id':
+        return 'ID';
+      case 'puesto':
+        return 'Puesto';
+      default:
+        return '';
+    }
+  }
+
   void _agregarEmpleado() {
-    // ... (Código de _agregarEmpleado)
     final nombreController = TextEditingController();
     final puestoController = TextEditingController();
     final sueldoController = TextEditingController();
+    
 
     showDialog(
       context: context,
@@ -365,7 +422,7 @@ class _PersonalScreenState extends State<PersonalScreen> {
             child: const Text('Cancelar'),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               if (nombreController.text.trim().isEmpty ||
                   puestoController.text.trim().isEmpty) return;
 
@@ -384,7 +441,9 @@ class _PersonalScreenState extends State<PersonalScreen> {
                   ),
                 );
                 _filterEmpleados();
+                _mostrarMensajeBienvenida = false;
               });
+              await _saveEmpleados(); // persistencia
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Empleado agregado exitosamente')),
@@ -402,7 +461,6 @@ class _PersonalScreenState extends State<PersonalScreen> {
   }
 
   void _editarEmpleado(Empleado empleado) {
-    // ... (Código de _editarEmpleado)
     final nombreController = TextEditingController(text: empleado.nombre);
     final puestoController = TextEditingController(text: empleado.puesto);
     final sueldoController = TextEditingController(text: empleado.sueldo.toString());
@@ -459,7 +517,7 @@ class _PersonalScreenState extends State<PersonalScreen> {
             child: const Text('Cancelar'),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               if (nombreController.text.trim().isEmpty ||
                   puestoController.text.trim().isEmpty) return;
 
@@ -480,6 +538,7 @@ class _PersonalScreenState extends State<PersonalScreen> {
                   _filterEmpleados();
                 }
               });
+              await _saveEmpleados(); // persistencia
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Empleado actualizado exitosamente')),
@@ -513,7 +572,7 @@ class _PersonalScreenState extends State<PersonalScreen> {
             child: const Text('Cancelar'),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               setState(() {
                 int index = empleados.indexWhere((e) => e.id == empleado.id);
                 if (index != -1) {
@@ -528,6 +587,7 @@ class _PersonalScreenState extends State<PersonalScreen> {
                   _filterEmpleados();
                 }
               });
+              await _saveEmpleados(); // persistencia
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
@@ -548,59 +608,92 @@ class _PersonalScreenState extends State<PersonalScreen> {
     );
   }
 
-
-Future<void> _exportarAPDF() async {
-  Map<String, dynamic>? filters;
-  
-  if (filtroCampoSeleccionado != null || filtroActivoSeleccionado != null) {
-    filters = {};
-    if (filtroCampoSeleccionado != null) {
-      filters['Campo'] = _getNombreCampo(filtroCampoSeleccionado!);
-    }
-    if (filtroActivoSeleccionado != null) {
-      filters['Estado'] = filtroActivoSeleccionado == true ? 'Activos' : 'Inactivos';
-    }
+  void _eliminarEmpleado(Empleado empleado) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Eliminar Empleado'),
+        content: Text('¿Estás seguro de eliminar a ${empleado.nombre}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              setState(() {
+                empleados.removeWhere((e) => e.id == empleado.id);
+                _filterEmpleados();
+                if (empleados.isEmpty) {
+                  _mostrarMensajeBienvenida = true;
+                }
+              });
+              await _saveEmpleados();
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Empleado eliminado')),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
   }
 
-  await PDFExportHelper.exportToPDF<Empleado>(
-    context: context,
-    data: empleadosFiltrados,
-    title: 'Reporte de Personal',
-    fileName: 'Reporte_Personal',
-    filters: filters,
-    buildContent: (empleados) {
-      return [
-        PDFExportHelper.buildTable(
-          headers: ['ID', 'Nombre', 'Puesto', 'Sueldo (MXN)', 'Vacaciones', 'Estado'],
-          data: empleados.map((empleado) {
-            return [
-              empleado.id,
-              empleado.nombre,
-              empleado.puesto,
-              '\$${empleado.sueldo.toStringAsFixed(2)}',
-              empleado.vacacionesPendientes.toString(),
-              empleado.activo ? 'Activo' : 'Inactivo',
-            ];
-          }).toList(),
-          headerDecoration: const pw.BoxDecoration(
-            color: PdfColor.fromInt(0xFF84B9BF),
+  Future<void> _exportarAPDF() async {
+    Map<String, dynamic>? filters;
+
+    if (filtroCampoSeleccionado != null || filtroActivoSeleccionado != null) {
+      filters = {};
+      if (filtroCampoSeleccionado != null) {
+        filters['Campo'] = _getNombreCampo(filtroCampoSeleccionado!);
+      }
+      if (filtroActivoSeleccionado != null) {
+        filters['Estado'] = filtroActivoSeleccionado == true ? 'Activos' : 'Inactivos';
+      }
+    }
+
+    await PDFExportHelper.exportToPDF<Empleado>(
+      context: context,
+      data: empleadosFiltrados,
+      title: 'Reporte de Personal',
+      fileName: 'Reporte_Personal',
+      filters: filters,
+      buildContent: (empleados) {
+        return [
+          PDFExportHelper.buildTable(
+            headers: ['ID', 'Nombre', 'Puesto', 'Sueldo (MXN)', 'Vacaciones', 'Estado'],
+            data: empleados.map((empleado) {
+              return [
+                empleado.id,
+                empleado.nombre,
+                empleado.puesto,
+                '\$${empleado.sueldo.toStringAsFixed(2)}',
+                empleado.vacacionesPendientes.toString(),
+                empleado.activo ? 'Activo' : 'Inactivo',
+              ];
+            }).toList(),
+            headerDecoration: const pw.BoxDecoration(
+              color: PdfColor.fromInt(0xFF84B9BF),
+            ),
+            oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey100),
           ),
-          oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey100),
-        ),
-      ];
-    },
-  );
-}
+        ];
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       drawer: const CustomDrawer(),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _agregarEmpleado,
-        backgroundColor: PersonalScreen.primaryColor,
-        child: const Icon(Icons.person_add, color: Colors.white),
-      ),
+      // FloatingActionButton eliminado; se usa botón en AppBar
       body: CustomScrollView(
         physics: const ClampingScrollPhysics(),
         slivers: [
@@ -624,7 +717,7 @@ Future<void> _exportarAPDF() async {
               background: Container(
                 color: PersonalScreen.primaryColor,
                 // Reducir el padding inferior para dar más espacio
-                padding: const EdgeInsets.only(top: 40, bottom: 40, left: 16, right: 16),
+                padding: const EdgeInsets.only(top: 20, bottom: 20, left: 16, right: 16),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
@@ -643,7 +736,27 @@ Future<void> _exportarAPDF() async {
                         color: Colors.white70,
                       ),
                     ),
-                    const SizedBox(height: 30),
+                    const SizedBox(height: 15),
+                    ElevatedButton.icon(
+                      onPressed: _agregarEmpleado,
+                      icon: const Icon(Icons.person_add, color: PersonalScreen.primaryColor),
+                      label: const Text(
+                        'Empleado',
+                        style: TextStyle(
+                          color: PersonalScreen.primaryColor,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                        elevation: 5,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
                     // Stats en la AppBar expandida
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 0.0),
@@ -689,9 +802,7 @@ Future<void> _exportarAPDF() async {
                     padding: const EdgeInsets.symmetric(horizontal: 20.0),
                     child: _buildExportButton(),
                   ),
-                  // Eliminamos el SizedBox(height: 20) después del botón de exportar
-                  // para reducir el espacio si es necesario, pero lo mantenemos al final.
-                  const SizedBox(height: 20), 
+                  const SizedBox(height: 20),
                   _buildEmpleadosList(),
                   const SizedBox(height: 80),
                 ],
@@ -702,12 +813,12 @@ Future<void> _exportarAPDF() async {
       ),
     );
   }
-  
+
   // Widget de estadísticas reutilizado con ajustes para evitar overflow
   Widget _buildStatContainer(String label, String value, Color bgColor) {
     return Container(
       // Padding vertical ligeramente reducido
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6), 
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
       decoration: BoxDecoration(
         color: bgColor.withOpacity(0.9),
         borderRadius: BorderRadius.circular(12),
@@ -736,7 +847,7 @@ Future<void> _exportarAPDF() async {
             value,
             style: const TextStyle(
               color: PersonalScreen.textColor,
-              fontSize: 18, 
+              fontSize: 18,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -745,11 +856,10 @@ Future<void> _exportarAPDF() async {
     );
   }
 
-  // Se mueve el ajuste de la posición a la barra de búsqueda y exportación
+  // Search bar
   Widget _buildSearchBar() {
     return Container(
-      // Ajuste de traslación para superponer en el área del AppBar
-      transform: Matrix4.translationValues(0.0, 10.0, 0.0), // Ajustado de -24.0 a -32.0 para subirlo más
+      transform: Matrix4.translationValues(0.0, 10.0, 0.0),
       child: Row(
         children: [
           Expanded(
@@ -769,9 +879,9 @@ Future<void> _exportarAPDF() async {
               child: TextField(
                 controller: searchController,
                 decoration: InputDecoration(
-                  hintText: filtroCampoSeleccionado == null 
-                    ? "Buscar por nombre, ID o puesto..." 
-                    : "Buscar en ${_getNombreCampo(filtroCampoSeleccionado!)}...",
+                  hintText: filtroCampoSeleccionado == null
+                      ? "Buscar por nombre, ID o puesto..."
+                      : "Buscar en ${_getNombreCampo(filtroCampoSeleccionado!)}...",
                   hintStyle: const TextStyle(color: Colors.black54),
                   border: InputBorder.none,
                   icon: const Icon(Icons.search, color: PersonalScreen.primaryColor),
@@ -812,8 +922,7 @@ Future<void> _exportarAPDF() async {
 
   Widget _buildExportButton() {
     return Container(
-      // Ajuste de traslación para superponer en el área del AppBar
-      transform: Matrix4.translationValues(0.0, 10.0, 0.0), 
+      transform: Matrix4.translationValues(0.0, 10.0, 0.0),
       width: double.infinity,
       child: ElevatedButton.icon(
         onPressed: _exportarAPDF,
@@ -854,12 +963,14 @@ Future<void> _exportarAPDF() async {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'No se encontraron empleados',
+                      _mostrarMensajeBienvenida ? 'Aquí puedes agregar empleados' : 'No se encontraron empleados',
                       style: TextStyle(
                         fontSize: 16,
                         color: Colors.grey[600],
                       ),
                     ),
+                    const SizedBox(height: 8),
+                    
                   ],
                 ),
               ),
@@ -873,7 +984,6 @@ Future<void> _exportarAPDF() async {
   }
 
   Widget _buildEmployeeCard(Empleado empleado) {
-    // ... (El resto de _buildEmployeeCard se mantiene igual)
     return Padding(
       padding: const EdgeInsets.only(bottom: 15.0),
       child: Container(
@@ -990,6 +1100,10 @@ Future<void> _exportarAPDF() async {
                   ),
                   onPressed: () => _toggleEstadoEmpleado(empleado),
                 ),
+                IconButton(
+                  icon: const Icon(Icons.delete, color: Colors.red, size: 22),
+                  onPressed: () => _eliminarEmpleado(empleado),
+                ),
               ],
             ),
           ],
@@ -999,6 +1113,7 @@ Future<void> _exportarAPDF() async {
   }
 }
 
+// Clase Empleado con serialización JSON
 class Empleado {
   final String id;
   final String nombre;
@@ -1015,4 +1130,24 @@ class Empleado {
     required this.vacacionesPendientes,
     required this.activo,
   });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'nombre': nombre,
+        'puesto': puesto,
+        'sueldo': sueldo,
+        'vacacionesPendientes': vacacionesPendientes,
+        'activo': activo,
+      };
+
+  factory Empleado.fromJson(Map<String, dynamic> json) {
+    return Empleado(
+      id: json['id'] as String,
+      nombre: json['nombre'] as String,
+      puesto: json['puesto'] as String,
+      sueldo: (json['sueldo'] as num).toDouble(),
+      vacacionesPendientes: json['vacacionesPendientes'] as int,
+      activo: json['activo'] as bool,
+    );
+  }
 }
