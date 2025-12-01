@@ -112,7 +112,7 @@ class _AlmacenScreenState extends State<AlmacenScreen> {
             borderRadius: BorderRadius.circular(20),
           ),
           title: const Text(
-            "Bienvenido al Almacén",
+            "Bienvenido",
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.w700,
@@ -675,7 +675,7 @@ class _AlmacenScreenState extends State<AlmacenScreen> {
               title: Container(),
               background: Container(
                 color: AlmacenScreen.headerColor,
-                padding: const EdgeInsets.only(top: 80, bottom: 20, left: 16, right: 16),
+                padding: const EdgeInsets.only(top: 20, bottom: 20, left: 16, right: 16),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [

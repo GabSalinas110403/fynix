@@ -466,7 +466,7 @@ Future<void> generarPDF() async {
         title: Container(),
         background: Container(
           color: FinanzasScreen.primaryColor,
-          padding: const EdgeInsets.only(top: 80, bottom: 20),
+          padding: const EdgeInsets.only(top: 20, bottom: 20),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
